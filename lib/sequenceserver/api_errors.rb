@@ -1,5 +1,7 @@
+require 'sinatra/base'
+
 module SequenceServer
-  Error = Class.new(Sinatra::Error)
+  Error = Class.new(::Sinatra::Error)
 
   ValidationError = Class.new(Error)
   # DatabaseUnreachableError is raised when the serialised Job object is

@@ -62,6 +62,7 @@ RSpec.configure do |config|
 
   # For file downloading.
   config.include DownloadHelpers, type: :feature
+  config.include ApiHelpers
 
   # Setup capybara tests.
   config.before :context, type: :feature do |_context|

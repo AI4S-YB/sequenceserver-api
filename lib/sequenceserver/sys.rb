@@ -51,6 +51,8 @@ module SequenceServer
                     err: temp_files[:stderr].path.to_s)
     end
 
+    options[:on_spawn]&.call(child_pid)
+
     # Wait for the termination of the child process.
     _, status = Process.wait2(child_pid)
 

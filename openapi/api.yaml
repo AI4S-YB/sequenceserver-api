@@ -1,0 +1,1067 @@
+openapi: 3.0.3
+info:
+  title: SequenceServer API
+  version: 0.1.0
+paths:
+  /api/v1/databases:
+    get:
+      summary: List configured BLAST databases
+      tags:
+        - databases
+      responses:
+        '200':
+          description: Databases returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Database'
+    post:
+      summary: Create a FASTA file in the configured database directory
+      tags:
+        - databases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatabaseCreate'
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                  description: Optional relative destination path under the configured database directory.
+                title:
+                  type: string
+                type:
+                  type: string
+                  enum:
+                    - nucleotide
+                    - protein
+      responses:
+        '201':
+          description: FASTA file stored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PendingDatabase'
+        '400':
+          description: Invalid file name or sequence body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sequences:
+    get:
+      summary: Retrieve sequence entries from configured BLAST databases
+      tags:
+        - sequences
+      parameters:
+        - in: query
+          name: sequence_ids
+          required: true
+          description: Comma-separated sequence ids.
+          schema:
+            type: string
+        - in: query
+          name: database_ids
+          required: true
+          description: Comma-separated database ids.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sequence data returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SequenceLookupResult'
+        '400':
+          description: Missing required query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Sequence ids or database ids are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sequences/download:
+    get:
+      summary: Download retrieved sequences as FASTA
+      tags:
+        - sequences
+      parameters:
+        - in: query
+          name: sequence_ids
+          required: true
+          description: Comma-separated sequence ids.
+          schema:
+            type: string
+        - in: query
+          name: database_ids
+          required: true
+          description: Comma-separated database ids.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: FASTA file returned successfully
+          content:
+            text/fasta:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Missing required query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Sequence ids or database ids are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Download retrieved sequences as FASTA using a JSON payload
+      tags:
+        - sequences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SequenceLookupRequest'
+      responses:
+        '200':
+          description: FASTA file returned successfully
+          content:
+            text/fasta:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Missing required body parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Sequence ids or database ids are invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/databases/{id}/index:
+    post:
+      summary: Enqueue BLAST indexing for a pending FASTA file
+      tags:
+        - databases
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatabaseIndexRequest'
+      responses:
+        '202':
+          description: Database indexing job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Job'
+        '400':
+          description: Invalid indexing request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: FASTA file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/databases/{id}:
+    delete:
+      summary: Delete a FASTA database file and its BLAST index files
+      tags:
+        - databases
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Database files deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DeleteDatabaseResult'
+        '404':
+          description: Database file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Database is still referenced by queued or running jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/database_jobs/{id}:
+    get:
+      summary: Fetch database indexing job status
+      tags:
+        - database_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job metadata returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/database_jobs:
+    get:
+      summary: List database indexing jobs
+      tags:
+        - database_jobs
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum:
+              - queued
+              - running
+              - succeeded
+              - failed
+              - cancelled
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Job list returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job'
+        '400':
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/database_jobs/{id}/cancel:
+    post:
+      summary: Cancel a running database indexing job
+      tags:
+        - database_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job cancellation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Job is not cancellable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/database_jobs/{id}/logs/{stream}:
+    get:
+      summary: Fetch database indexing job logs
+      tags:
+        - database_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: stream
+          required: true
+          schema:
+            type: string
+            enum:
+              - stdout
+              - stderr
+      responses:
+        '200':
+          description: Requested log content returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/JobLog'
+        '400':
+          description: Invalid log stream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/database_jobs/{id}/result:
+    get:
+      summary: Fetch database indexing result
+      tags:
+        - database_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Indexed database metadata returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/Database'
+                      - type: object
+                        properties:
+                          indexed:
+                            type: boolean
+        '202':
+          description: Job accepted but index build is not ready yet
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs:
+    post:
+      summary: Create a BLAST job
+      tags:
+        - blast_jobs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlastJobCreate'
+      responses:
+        '202':
+          description: Job accepted for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BlastJob'
+        '400':
+          description: Invalid request body or job parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs/{id}:
+    get:
+      summary: Fetch BLAST job status
+      tags:
+        - blast_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job metadata returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BlastJob'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs:
+    get:
+      summary: List BLAST jobs
+      tags:
+        - blast_jobs
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum:
+              - queued
+              - running
+              - succeeded
+              - failed
+              - cancelled
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Job list returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BlastJob'
+        '400':
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs/{id}/cancel:
+    post:
+      summary: Cancel a running BLAST job
+      tags:
+        - blast_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job cancellation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BlastJob'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Job is not cancellable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs/{id}/logs/{stream}:
+    get:
+      summary: Fetch BLAST job logs
+      tags:
+        - blast_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: stream
+          required: true
+          schema:
+            type: string
+            enum:
+              - stdout
+              - stderr
+      responses:
+        '200':
+          description: Requested log content returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/JobLog'
+        '400':
+          description: Invalid log stream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs/{id}/result:
+    get:
+      summary: Fetch BLAST job result
+      tags:
+        - blast_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: BLAST result returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+        '202':
+          description: Job accepted but result is not ready yet
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BlastJob'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/blast_jobs/{id}/download/{type}:
+    get:
+      summary: Download BLAST job result in an exported format
+      tags:
+        - blast_jobs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+            enum:
+              - pairwise
+              - qa
+              - qa_no_identity
+              - fqa
+              - fqa_no_identity
+              - xml
+              - std_tsv
+              - full_tsv
+              - custom_tsv
+              - asn_text
+              - asn_binary
+              - csv
+              - archive
+      responses:
+        '200':
+          description: Exported BLAST result file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            text/xml:
+              schema:
+                type: string
+                format: binary
+            text/tab-separated-values:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Unsupported export format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job or export file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Result is not ready for download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    Database:
+      type: object
+      required:
+        - id
+        - name
+        - title
+        - type
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+        nsequences:
+          type: integer
+        ncharacters:
+          type: integer
+        updated_on:
+          type: string
+        format:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+    PendingDatabase:
+      type: object
+      required:
+        - id
+        - name
+        - indexed
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+          nullable: true
+        indexed:
+          type: boolean
+        index_job:
+          $ref: '#/components/schemas/Job'
+    DeleteDatabaseResult:
+      type: object
+      required:
+        - id
+        - name
+        - deleted
+        - removed_files
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        deleted:
+          type: boolean
+        removed_files:
+          type: array
+          items:
+            type: string
+    DatabaseCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        sequence:
+          type: string
+        source:
+          $ref: '#/components/schemas/DatabaseSource'
+        title:
+          type: string
+        type:
+          type: string
+          enum:
+            - nucleotide
+            - protein
+        auto_index:
+          type: boolean
+        taxid:
+          type: integer
+      anyOf:
+        - required:
+            - name
+            - sequence
+        - required:
+            - source
+    DatabaseSource:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - local_path
+            - s3
+            - url
+        path:
+          type: string
+        uri:
+          type: string
+        region:
+          type: string
+    DatabaseIndexRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        type:
+          type: string
+        taxid:
+          type: integer
+    SequenceLookupRequest:
+      type: object
+      required:
+        - sequence_ids
+        - database_ids
+      properties:
+        sequence_ids:
+          type: array
+          items:
+            type: string
+        database_ids:
+          type: array
+          items:
+            type: string
+    SequenceEntry:
+      type: object
+      required:
+        - id
+        - title
+        - value
+        - length
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        value:
+          type: string
+        length:
+          type: integer
+    SequenceLookupError:
+      type: object
+      required:
+        - title
+        - message
+      properties:
+        title:
+          type: string
+        message:
+          type: string
+    SequenceLookupResult:
+      type: object
+      required:
+        - sequence_ids
+        - database_ids
+        - sequence_count
+        - sequences
+        - error_msgs
+      properties:
+        sequence_ids:
+          type: array
+          items:
+            type: string
+        database_ids:
+          type: array
+          items:
+            type: string
+        sequence_count:
+          type: integer
+        sequences:
+          type: array
+          items:
+            $ref: '#/components/schemas/SequenceEntry'
+        error_msgs:
+          type: array
+          items:
+            $ref: '#/components/schemas/SequenceLookupError'
+    BlastJobCreate:
+      type: object
+      required:
+        - sequence
+        - databases
+        - method
+      properties:
+        sequence:
+          type: string
+        databases:
+          type: array
+          items:
+            type: string
+        method:
+          type: string
+        advanced:
+          type: string
+        num_threads:
+          type: integer
+    Job:
+      type: object
+      required:
+        - id
+        - kind
+        - status
+        - submitted_at
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - blast
+            - database_index
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - succeeded
+            - failed
+            - cancelled
+        submitted_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        database_id:
+          type: string
+          nullable: true
+        databases:
+          type: array
+          items:
+            $ref: '#/components/schemas/Database'
+        method:
+          type: string
+          nullable: true
+        result_url:
+          type: string
+          nullable: true
+        log_urls:
+          type: object
+          properties:
+            stdout:
+              type: string
+            stderr:
+              type: string
+        exitstatus:
+          type: integer
+    BlastJob:
+      allOf:
+        - $ref: '#/components/schemas/Job'
+        - type: object
+          properties:
+            method:
+              type: string
+              nullable: true
+            downloads:
+              type: array
+              items:
+                $ref: '#/components/schemas/BlastJobDownload'
+    BlastJobDownload:
+      type: object
+      required:
+        - type
+        - label
+        - url
+        - extension
+        - mime
+      properties:
+        type:
+          type: string
+        label:
+          type: string
+        url:
+          type: string
+        extension:
+          type: string
+        mime:
+          type: string
+    JobLog:
+      type: object
+      required:
+        - id
+        - stream
+        - content
+      properties:
+        id:
+          type: string
+        stream:
+          type: string
+          enum:
+            - stdout
+            - stderr
+        content:
+          type: string
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string

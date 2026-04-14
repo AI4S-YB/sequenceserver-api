@@ -34,6 +34,7 @@ module SequenceServer
           Symbol,
           SequenceServer::Job,
           SequenceServer::BLAST::Job,
+          SequenceServer::DatabaseIndexJob,
           SequenceServer::Database
         ]
       end
@@ -99,7 +100,8 @@ module SequenceServer
       raise e
     end
 
-    attr_reader :id, :submitted_at, :completed_at, :exitstatus
+    attr_reader :id, :submitted_at, :started_at, :completed_at, :exitstatus,
+                :pid, :cancelled_at
 
     # Returns shell command that will be executed. Subclass needs to provide a
     # concrete implementation.
@@ -111,7 +113,8 @@ module SequenceServer
     #
     # NOTE: This method is called asynchronously by thread pool.
     def run
-      sys(command, path: config[:bin], stdout: stdout, stderr: stderr)
+      mark_started!
+      sys(command, path: config[:bin], stdout: stdout, stderr: stderr, on_spawn: ->(process_id) { track_pid(process_id) })
       done!
     rescue CommandFailed => e
       done! e.exitstatus
@@ -127,6 +130,33 @@ module SequenceServer
     # Subclasses should provide their own implementation.
     def raise!
       fail if done? && exitstatus != 0
+    end
+
+    def cancel!
+      return false if done? || cancelled?
+      return false unless pid
+
+      Process.kill('TERM', pid)
+      @cancelled_at = Time.now
+      save
+      true
+    rescue Errno::ESRCH
+      false
+    end
+
+    def cancelled?
+      !@cancelled_at.nil?
+    end
+
+    def log_content(stream)
+      path = case stream.to_s
+             when 'stdout' then stdout
+             when 'stderr' then stderr
+             else
+               raise ArgumentError, "Unsupported stream: #{stream}"
+             end
+
+      File.exist?(path) ? File.read(path) : ''
     end
 
     # Where will the stdout be written to during execution and read from later.
@@ -180,6 +210,17 @@ module SequenceServer
     def done!(status = 0)
       @completed_at = Time.now
       @exitstatus = status
+      @pid = nil
+      save
+    end
+
+    def mark_started!
+      @started_at ||= Time.now
+      save
+    end
+
+    def track_pid(process_id)
+      @pid = process_id
       save
     end
 

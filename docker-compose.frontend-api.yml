@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sequenceserver-api
+    ports:
+      - "4567:4567"
+    volumes:
+      - ./db:/db
+      - ~/.sequenceserver.conf:/root/.sequenceserver.conf:ro
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./sequenceserver-web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: "http://localhost:4567"
+    container_name: sequenceserver-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped

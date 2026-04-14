@@ -134,6 +134,10 @@ module SequenceServer
         job_lifetime: 43_200,
         # Set cloud_share_url to 'disabled' to disable the cloud sharing feature
         cloud_share_url: 'https://share.sequenceserver.com/api/v1/shared-job',
+        allowed_import_paths: [],
+        allowed_import_urls: [],
+        allowed_s3_buckets: [],
+        allowed_origins: [],
         # Warn in the UI before rendering results larger than this value
         large_result_warning_threshold: 250 * 1024 * 1024,
         optimistic: false # Faster, but does not perform DB compatibility checks

@@ -1,5 +1,6 @@
 require 'find'
 require 'forwardable'
+require 'digest/md5'
 
 module SequenceServer
   # Smart `makeblastdb` wrapper: recursively scans database directory determining
@@ -86,6 +87,43 @@ module SequenceServer
 
     def any_to_format?
       fastas_to_format.any?
+    end
+
+    def reset_scan_cache!
+      %i[@formatted_fastas @fastas_to_reformat @fastas_to_format @probably_fastas].each do |ivar|
+        remove_instance_variable(ivar) if instance_variable_defined?(ivar)
+      end
+    end
+
+    def suggested_title(file)
+      make_db_title(file)
+    end
+
+    def guess_sequence_type(file)
+      guess_sequence_type_in_fasta(file)
+    end
+
+    def fasta_path_for(id)
+      reset_scan_cache!
+      probably_fastas.find { |path| Digest::MD5.hexdigest(path) == id }
+    end
+
+    def format_file(file, title: nil, type: nil, taxid: 0)
+      reset_scan_cache!
+
+      unless File.exist?(file) && probably_fasta?(file)
+        raise ArgumentError, 'Provided file is not a FASTA file in the database directory.'
+      end
+
+      type ||= guess_sequence_type_in_fasta(file)
+      raise ArgumentError, 'Could not determine sequence type from FASTA content.' unless type
+
+      title ||= make_db_title(file)
+      taxonomy = "-taxid #{Integer(taxid || 0)}"
+
+      _make_blast_database(file, type, title, taxonomy, exit_on_error: false)
+      reset_scan_cache!
+      true
     end
 
     private
@@ -213,7 +251,7 @@ module SequenceServer
       retry
     end
 
-    def _make_blast_database(file, type, title, taxonomy)
+    def _make_blast_database(file, type, title, taxonomy, exit_on_error: true)
       cmd = "makeblastdb -parse_seqids -hash_index -in '#{file}'" \
             " -dbtype #{type.to_s.slice(0, 4)} -title '#{title}'" \
             " #{taxonomy}"
@@ -236,13 +274,18 @@ module SequenceServer
 
       true
     rescue CommandFailed => e
-      puts <<~MSG
+      message = <<~MSG
         Could not create BLAST database for: #{file}
         Tried: #{cmd}
         stdout: #{e.stdout}
         stderr: #{e.stderr}
       MSG
-      exit!
+      if exit_on_error
+        puts message
+        exit!
+      end
+
+      raise SystemError, message
     end
 
     # Extract FASTA file from BLAST database.

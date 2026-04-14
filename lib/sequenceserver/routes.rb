@@ -9,11 +9,15 @@ require 'sequenceserver/blast/tasks'
 require 'sequenceserver/report'
 require 'sequenceserver/database'
 require 'sequenceserver/sequence'
+require 'sequenceserver/database_index_job'
+require 'sequenceserver/api/v1/routes'
 require 'rack/csrf'
 
 module SequenceServer
   # Controller.
   class Routes < Sinatra::Base
+    register SequenceServer::API::V1::Routes
+
     # See
     # http://www.sinatrarb.com/configuration.html
     configure do
@@ -68,7 +72,18 @@ module SequenceServer
         secret: ENV.fetch('SESSION_SECRET') { SecureRandom.alphanumeric(64) }
       )
 
-      use Rack::Csrf, raise: true, skip: ['POST:/cloud_share'] unless ENV['SKIP_CSRF_PROTECTION'] == 'true'
+      use Rack::Csrf,
+          raise: true,
+          skip: [
+            'POST:/cloud_share',
+            'POST:/api/v1/blast_jobs',
+            'POST:/api/v1/databases',
+            'POST:/api/v1/sequences/download',
+            'POST:/api/v1/databases/[^/]+/index',
+            'DELETE:/api/v1/databases/[^/]+',
+            'POST:/api/v1/blast_jobs/[^/]+/cancel',
+            'POST:/api/v1/database_jobs/[^/]+/cancel'
+          ] unless ENV['SKIP_CSRF_PROTECTION'] == 'true'
     end
 
     unless ENV['SEQUENCE_SERVER_COMPRESS_RESPONSES'] == 'false'
@@ -88,7 +103,37 @@ module SequenceServer
 
     # Returns base HTML. Rest happens client-side: rendering the search form.
     get '/' do
+      return serve_frontend_app if frontend_app_available?
+
       erb :search, layout: settings.layout
+    end
+
+    get '/assets/*' do |path|
+      serve_frontend_asset(File.join('assets', path))
+    end
+
+    get '/favicon.svg' do
+      serve_frontend_asset('favicon.svg')
+    end
+
+    get '/icons.svg' do
+      serve_frontend_asset('icons.svg')
+    end
+
+    get '/databases' do
+      serve_frontend_app_or_halt
+    end
+
+    get '/blast/new' do
+      serve_frontend_app_or_halt
+    end
+
+    get '/jobs' do
+      serve_frontend_app_or_halt
+    end
+
+    get %r{/jobs/(blast|database)/[^/]+} do
+      serve_frontend_app_or_halt
     end
 
     # Returns data that is used to render the search form client side. These
@@ -118,7 +163,7 @@ module SequenceServer
         erb :search, layout: settings.layout
       else
         job = Job.create(params)
-        redirect to("/#{job.id}")
+        redirect to(frontend_app_available? ? "/jobs/blast/#{job.id}" : "/#{job.id}")
       end
     end
 
@@ -144,6 +189,8 @@ module SequenceServer
     get '/:jid' do |jid|
       job = Job.fetch(jid)
       halt 404, File.read(File.join(settings.root, 'public/404.html')) if job.nil?
+
+      redirect to("/jobs/blast/#{jid}") if frontend_app_available?
 
       erb :report, layout: settings.layout
     end
@@ -373,6 +420,45 @@ module SequenceServer
     end
 
     private
+
+    def frontend_build_dir
+      File.expand_path(File.join(settings.root, 'sequenceserver-web', 'dist'))
+    end
+
+    def frontend_entry_path
+      File.join(frontend_build_dir, 'index.html')
+    end
+
+    def frontend_app_available?
+      File.file?(frontend_entry_path)
+    end
+
+    def frontend_asset_path(relative_path)
+      path = File.expand_path(File.join(frontend_build_dir, relative_path))
+      return unless path.start_with?("#{frontend_build_dir}#{File::SEPARATOR}")
+      return unless File.file?(path)
+
+      path
+    end
+
+    def serve_frontend_app
+      Rack::Csrf.token(env)
+      content_type :html
+      send_file(frontend_entry_path)
+    end
+
+    def serve_frontend_app_or_halt
+      halt 404, File.read(File.join(settings.root, 'public/404.html')) unless frontend_app_available?
+
+      serve_frontend_app
+    end
+
+    def serve_frontend_asset(relative_path)
+      asset_path = frontend_asset_path(relative_path)
+      halt 404, File.read(File.join(settings.root, 'public/404.html')) unless asset_path
+
+      send_file(asset_path)
+    end
 
     def fetch_job(job_id)
       Job.fetch(job_id)

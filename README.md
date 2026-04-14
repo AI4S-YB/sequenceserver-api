@@ -7,6 +7,11 @@
 <!--[![code climate](https://codeclimate.com/github/wurmlab/sequenceserver/badges/gpa.svg)](https://codeclimate.com/github/wurmlab/sequenceserver)-->
 <!--[![browser matrix](https://saucelabs.com/browser-matrix/yeban.svg)](https://saucelabs.com/u/yeban)-->
 
+Chinese documents for the frontend-separation fork/customization:
+
+- [README.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/README.zh-CN.md)
+- [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
+
 # SequenceServer - BLAST searching made easy!
 
 SequenceServer lets you rapidly set up a BLAST+ server with an intuitive user interface for personal or group use.

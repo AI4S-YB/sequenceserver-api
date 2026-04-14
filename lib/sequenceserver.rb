@@ -22,6 +22,8 @@ module SequenceServer
   require 'sequenceserver/logger'
   require 'sequenceserver/config'
   require 'sequenceserver/server'
+  require 'sequenceserver/database_index_job'
+  require 'sequenceserver/database_importer'
   require 'sequenceserver/routes'
   require 'sequenceserver/makeblastdb'
   require 'sequenceserver/job_remover'
@@ -61,6 +63,12 @@ module SequenceServer
     # MAKEBLASTDB service object.
     def makeblastdb
       @makeblastdb ||= MAKEBLASTDB.new(config[:database_dir])
+    end
+
+    def refresh_databases!
+      @makeblastdb = nil
+      Database.clear
+      Database.collection = makeblastdb.formatted_fastas
     end
 
     # SequenceServer initialisation routine.
