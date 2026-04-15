@@ -42,6 +42,34 @@ module SequenceServer
           }
         }.freeze
 
+        BLAST_QUERY_EXAMPLES = {
+          'blastn' => {
+            label: 'Arabidopsis thaliana mRNA',
+            query_type: 'nucleotide',
+            path: 'data/examples/blast-query/arabidopsis_mrna.fa'
+          },
+          'blastx' => {
+            label: 'Arabidopsis thaliana mRNA',
+            query_type: 'nucleotide',
+            path: 'data/examples/blast-query/arabidopsis_mrna.fa'
+          },
+          'tblastx' => {
+            label: 'Arabidopsis thaliana mRNA',
+            query_type: 'nucleotide',
+            path: 'data/examples/blast-query/arabidopsis_mrna.fa'
+          },
+          'blastp' => {
+            label: 'Arabidopsis thaliana protein',
+            query_type: 'protein',
+            path: 'data/examples/blast-query/arabidopsis_protein.fa'
+          },
+          'tblastn' => {
+            label: 'Arabidopsis thaliana protein',
+            query_type: 'protein',
+            path: 'data/examples/blast-query/arabidopsis_protein.fa'
+          }
+        }.freeze
+
         BLAST_DOWNLOAD_LABELS = {
           'pairwise' => 'Pairwise 文本',
           'qa' => 'Query anchored',
@@ -239,11 +267,28 @@ module SequenceServer
             databases: Database.all.map { |database| serialize_database(database) },
             methods: serialize_blast_form_methods,
             options: serialize_blast_form_options,
-            blast_task_map: SequenceServer::BLAST::Tasks.to_h
+            blast_task_map: SequenceServer::BLAST::Tasks.to_h,
+            query_examples: serialize_blast_query_examples
           }
 
           payload[:database_tree] = Database.tree if SequenceServer.config[:databases_widget] == 'tree'
           payload
+        end
+
+        def serialize_blast_query_examples
+          BLAST_QUERY_EXAMPLES.each_with_object({}) do |(method, metadata), memo|
+            path = File.expand_path(File.join(settings.root, metadata[:path]))
+            next unless File.file?(path)
+
+            sequence = File.read(path).to_s.strip
+            next if sequence.empty?
+
+            memo[method] = {
+              label: metadata[:label],
+              query_type: metadata[:query_type],
+              sequence: sequence
+            }
+          end
         end
 
         def large_result_warning_threshold

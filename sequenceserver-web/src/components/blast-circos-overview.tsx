@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { exportSvgElement, exportSvgElementAsPng } from '../lib/svg-export'
+import { useI18n } from '../lib/i18n'
 import type { BlastHitPreview, BlastQueryPreview, BlastResultSummary } from '../lib/job-results'
 
 const SVG_SIZE = 760
@@ -190,6 +191,7 @@ export function BlastCircosOverview({
   summary: BlastResultSummary
   selectedQuery: BlastQueryPreview | null
 }) {
+  const { isChinese, locale } = useI18n()
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [focusOverride, setFocusOverride] = useState<string | null>(null)
   const [hoverText, setHoverText] = useState('')
@@ -206,11 +208,11 @@ export function BlastCircosOverview({
       if (type === 'svg') {
         exportSvgElement(svgRef.current, filename)
       } else {
-        await exportSvgElementAsPng(svgRef.current, filename)
+        await exportSvgElementAsPng(svgRef.current, filename, locale)
       }
-      setExportMessage(`圆环总览已导出为 ${type.toUpperCase()}。`)
+      setExportMessage(isChinese ? `圆环总览已导出为 ${type.toUpperCase()}。` : `Circos overview exported as ${type.toUpperCase()}.`)
     } catch (error) {
-      setExportMessage(error instanceof Error ? error.message : '圆环总览导出失败。')
+      setExportMessage(error instanceof Error ? error.message : (isChinese ? '圆环总览导出失败。' : 'Failed to export the circos overview.'))
     }
   }
 
@@ -218,9 +220,9 @@ export function BlastCircosOverview({
     return (
       <div className="visual-card">
         <div className="visual-card-header">
-          <h5>全局圆环总览</h5>
+          <h5>{isChinese ? '全局圆环总览' : 'Global Circos Overview'}</h5>
         </div>
-        <p>当前命中关系过少，暂时不适合展示 Circos 风格总览。</p>
+        <p>{isChinese ? '当前命中关系过少，暂时不适合展示 Circos 风格总览。' : 'There are too few hit relationships to render a useful circos-style overview.'}</p>
       </div>
     )
   }
@@ -228,7 +230,7 @@ export function BlastCircosOverview({
   return (
     <div className="visual-card">
       <div className="visual-card-header">
-        <h5>全局圆环总览</h5>
+        <h5>{isChinese ? '全局圆环总览' : 'Global Circos Overview'}</h5>
         <div className="toolbar-group">
           <button className="secondary-button" onClick={() => void handleExport('svg')} type="button">
             SVG
@@ -241,18 +243,20 @@ export function BlastCircosOverview({
             onClick={() => setFocusOverride('')}
             type="button"
           >
-            {activeNodeId ? '清除聚焦' : '全部显示'}
+            {activeNodeId ? (isChinese ? '清除聚焦' : 'Clear Focus') : (isChinese ? '全部显示' : 'Show All')}
           </button>
         </div>
       </div>
       <p className="toolbar-note">
-        选择前 {overview.queryCount} 个有命中的 query，以及它们前 {MAX_HITS_PER_QUERY} 个 hit 构建圆环总览；点击外圈可聚焦 query 或 hit。
+        {isChinese
+          ? `选择前 ${overview.queryCount} 个有命中的 query，以及它们前 ${MAX_HITS_PER_QUERY} 个 hit 构建圆环总览；点击外圈可聚焦 query 或 hit。`
+          : `Builds a circos overview from the first ${overview.queryCount} queries with hits and their top ${MAX_HITS_PER_QUERY} hits; click the outer ring to focus a query or hit.`}
       </p>
       {hoverText ? <p className="toolbar-note">{hoverText}</p> : null}
       {exportMessage ? <p className="toolbar-note">{exportMessage}</p> : null}
       <div className="visual-scroll">
         <svg
-          aria-label="BLAST 全局圆环总览"
+          aria-label={isChinese ? 'BLAST 全局圆环总览' : 'BLAST global circos overview'}
           className="overview-chart circos-chart"
           ref={svgRef}
           viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
@@ -268,7 +272,9 @@ export function BlastCircosOverview({
                 key={link.id}
                 onMouseEnter={() =>
                   setHoverText(
-                    `${link.queryId} -> ${link.hitId} | hit rank ${link.rank} | bit score ${link.bitScore.toFixed(2)} | evalue ${link.evalue ?? '-'}`,
+                    isChinese
+                      ? `${link.queryId} -> ${link.hitId} | hit 排名 ${link.rank} | bit score ${link.bitScore.toFixed(2)} | evalue ${link.evalue ?? '-'}`
+                      : `${link.queryId} -> ${link.hitId} | hit rank ${link.rank} | bit score ${link.bitScore.toFixed(2)} | evalue ${link.evalue ?? '-'}`
                   )
                 }
                 onMouseLeave={() => setHoverText('')}
@@ -295,7 +301,9 @@ export function BlastCircosOverview({
                   fillOpacity={active ? 0.92 : 0.38}
                   onClick={() => setFocusOverride((current) => (current === node.id ? '' : node.id))}
                   onMouseEnter={() =>
-                    setHoverText(`${node.kind === 'query' ? 'Query' : 'Hit'}: ${node.id} | 长度 ${new Intl.NumberFormat('zh-CN').format(node.length)}`)
+                    setHoverText(
+                      `${node.kind === 'query' ? 'Query' : 'Hit'}: ${node.id} | ${isChinese ? '长度' : 'Length'} ${new Intl.NumberFormat(locale).format(node.length)}`,
+                    )
                   }
                   onMouseLeave={() => setHoverText('')}
                   stroke="rgba(20, 33, 61, 0.12)"
@@ -316,7 +324,9 @@ export function BlastCircosOverview({
         </svg>
       </div>
       <p className="metric-helper">
-        外圈按序列长度分配弧段，内层弦线表示 query 与 top hit 的 HSP 对应关系。颜色越深表示 bit score 越高。
+        {isChinese
+          ? '外圈按序列长度分配弧段，内层弦线表示 query 与 top hit 的 HSP 对应关系。颜色越深表示 bit score 越高。'
+          : 'Outer arcs are sized by sequence length, and inner chords show HSP links between queries and top hits. Darker color indicates a higher bit score.'}
       </p>
     </div>
   )

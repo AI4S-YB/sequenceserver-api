@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchBlastJobs, fetchDatabaseJobs, fetchDatabases } from '../lib/api'
+import { useI18n } from '../lib/i18n'
 import type { Database, Job } from '../types/api'
 
 function MetricCard({ label, value, helper }: { label: string; value: number; helper: string }) {
@@ -14,6 +15,8 @@ function MetricCard({ label, value, helper }: { label: string; value: number; he
 }
 
 function RecentJobs({ title, jobs }: { title: string; jobs: Job[] }) {
+  const { t } = useI18n()
+
   return (
     <article className="panel">
       <h3>{title}</h3>
@@ -23,26 +26,28 @@ function RecentJobs({ title, jobs }: { title: string; jobs: Job[] }) {
             <strong>
               <Link to={job.kind === 'blast' ? `/jobs/blast/${job.id}` : `/jobs/database/${job.id}`}>{job.id}</Link>
             </strong>
-            <span>状态：{job.status}</span>
-            {job.title ? <span>标题：{job.title}</span> : null}
-            {job.method ? <span>方法：{job.method}</span> : null}
+            <span>{t('common.status')}：{job.status}</span>
+            {job.title ? <span>{t('common.title')}：{job.title}</span> : null}
+            {job.method ? <span>{t('common.method')}：{job.method}</span> : null}
           </div>
         ))}
-        {!jobs.length ? <p>暂无数据。</p> : null}
+        {!jobs.length ? <p>{t('common.noData')}</p> : null}
       </div>
     </article>
   )
 }
 
 function RecentDatabases({ databases }: { databases: Database[] }) {
+  const { t } = useI18n()
+
   return (
     <article className="panel">
-      <h3>数据库概览</h3>
+      <h3>{t('dashboard.databaseOverview')}</h3>
       <div className="list">
         {databases.slice(0, 6).map((database) => (
           <div className="list-item" key={database.id}>
             <strong>{database.title}</strong>
-            <span>类型：{database.type}</span>
+            <span>{t('common.type')}：{database.type}</span>
             <code>{database.name}</code>
           </div>
         ))}
@@ -52,6 +57,7 @@ function RecentDatabases({ databases }: { databases: Database[] }) {
 }
 
 export function DashboardPage() {
+  const { t } = useI18n()
   const [databases, setDatabases] = useState<Database[]>([])
   const [blastJobs, setBlastJobs] = useState<Job[]>([])
   const [databaseJobs, setDatabaseJobs] = useState<Job[]>([])
@@ -64,7 +70,7 @@ export function DashboardPage() {
         setBlastJobs(blastList)
         setDatabaseJobs(indexList)
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : '加载首页数据失败'))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load overview data'))
   }, [])
 
   const metrics = useMemo(() => {
@@ -80,46 +86,44 @@ export function DashboardPage() {
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">系统总览</p>
-        <h2>前后端分离首页仪表盘</h2>
-        <p className="page-copy">
-          这里已经开始使用真实 API 数据，显示数据库数量、最近任务与系统状态。
-        </p>
+        <p className="eyebrow">{t('dashboard.eyebrow')}</p>
+        <h2>{t('dashboard.title')}</h2>
+        <p className="page-copy">{t('dashboard.copy')}</p>
       </header>
 
       {error ? <p className="error-text">{error}</p> : null}
 
       <div className="card-grid">
-        <MetricCard label="数据库数量" value={metrics.databases} helper="当前已加载数据库数" />
-        <MetricCard label="运行中任务" value={metrics.running} helper="BLAST 与索引任务合计" />
-        <MetricCard label="排队中任务" value={metrics.queued} helper="等待执行的任务" />
-        <MetricCard label="失败任务" value={metrics.failed} helper="需要人工检查的任务" />
+        <MetricCard label={t('dashboard.metric.databases')} value={metrics.databases} helper={t('dashboard.metric.databasesHelper')} />
+        <MetricCard label={t('dashboard.metric.running')} value={metrics.running} helper={t('dashboard.metric.runningHelper')} />
+        <MetricCard label={t('dashboard.metric.queued')} value={metrics.queued} helper={t('dashboard.metric.queuedHelper')} />
+        <MetricCard label={t('dashboard.metric.failed')} value={metrics.failed} helper={t('dashboard.metric.failedHelper')} />
       </div>
 
       <div className="two-column">
         <RecentDatabases databases={databases} />
         <article className="panel">
-          <h3>快捷入口</h3>
+          <h3>{t('dashboard.quickLinks')}</h3>
           <div className="list">
             <div className="list-item">
-              <strong><Link to="/databases">进入数据库管理</Link></strong>
-              <span>导入 FASTA、路径、URL 或 S3。</span>
+              <strong><Link to="/databases">{t('dashboard.openDatabases')}</Link></strong>
+              <span>{t('dashboard.openDatabasesHelper')}</span>
             </div>
             <div className="list-item">
-              <strong><Link to="/blast/new">进入 BLAST 提交</Link></strong>
-              <span>创建新的 BLAST 任务。</span>
+              <strong><Link to="/blast/new">{t('dashboard.openBlast')}</Link></strong>
+              <span>{t('dashboard.openBlastHelper')}</span>
             </div>
             <div className="list-item">
-              <strong><Link to="/jobs">进入任务中心</Link></strong>
-              <span>查看近期任务、状态与日志。</span>
+              <strong><Link to="/jobs">{t('dashboard.openJobs')}</Link></strong>
+              <span>{t('dashboard.openJobsHelper')}</span>
             </div>
           </div>
         </article>
       </div>
 
       <div className="two-column">
-        <RecentJobs title="最近 BLAST 任务" jobs={blastJobs} />
-        <RecentJobs title="最近数据库索引任务" jobs={databaseJobs} />
+        <RecentJobs title={t('dashboard.recentBlastJobs')} jobs={blastJobs} />
+        <RecentJobs title={t('dashboard.recentDatabaseJobs')} jobs={databaseJobs} />
       </div>
     </section>
   )

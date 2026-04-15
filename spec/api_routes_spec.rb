@@ -17,6 +17,43 @@ module SequenceServer
       SequenceServer
     end
 
+    describe 'GET /api' do
+      it 'redirects to the Swagger UI entry' do
+        get '/api'
+
+        expect(last_response.status).to eq(302)
+        expect(last_response.headers['Location']).to end_with('/api/docs')
+      end
+    end
+
+    describe 'GET /api/openapi.json' do
+      it 'returns the OpenAPI document' do
+        get '/api/openapi.json'
+
+        expect(last_response.status).to eq(200)
+        expect(last_response.content_type).to include('application/json')
+
+        payload = JSON.parse(last_response.body)
+        expect(payload['openapi']).to eq('3.1.0')
+        expect(payload.fetch('paths')).to include(
+          '/api/v1/databases',
+          '/api/v1/blast_jobs',
+          '/api/v1/database_jobs'
+        )
+      end
+    end
+
+    describe 'GET /api/docs' do
+      it 'returns the Swagger UI page' do
+        get '/api/docs'
+
+        expect(last_response.status).to eq(200)
+        expect(last_response.content_type).to include('text/html')
+        expect(last_response.body).to include('SwaggerUIBundle')
+        expect(last_response.body).to include('/api/openapi.json')
+      end
+    end
+
     describe 'GET /api/v1/databases' do
       it 'returns the configured BLAST databases as JSON' do
         get '/api/v1/databases'
@@ -60,6 +97,16 @@ module SequenceServer
         )
         expect(payload.fetch('blast_task_map')).to include('blastn')
         expect(payload.fetch('options')).to include('blastn')
+        expect(payload.fetch('query_examples')).to include(
+          'blastn' => include(
+            'label' => 'Arabidopsis thaliana mRNA',
+            'query_type' => 'nucleotide'
+          ),
+          'blastp' => include(
+            'label' => 'Arabidopsis thaliana protein',
+            'query_type' => 'protein'
+          )
+        )
       end
     end
 

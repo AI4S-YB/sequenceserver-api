@@ -103,36 +103,44 @@ module SequenceServer
 
     # Returns base HTML. Rest happens client-side: rendering the search form.
     get '/' do
+      halt_frontend_disabled! if frontend_http_disabled?
       return serve_frontend_app if frontend_app_available?
 
       erb :search, layout: settings.layout
     end
 
     get '/assets/*' do |path|
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_asset(File.join('assets', path))
     end
 
     get '/favicon.svg' do
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_asset('favicon.svg')
     end
 
     get '/icons.svg' do
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_asset('icons.svg')
     end
 
     get '/databases' do
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_app_or_halt
     end
 
     get '/blast/new' do
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_app_or_halt
     end
 
     get '/jobs' do
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_app_or_halt
     end
 
     get %r{/jobs/(blast|database)/[^/]+} do
+      halt_frontend_disabled! if frontend_http_disabled?
       serve_frontend_app_or_halt
     end
 
@@ -158,6 +166,7 @@ module SequenceServer
 
     # Queues a search job and redirects to `/:jid`.
     post '/' do
+      halt_frontend_disabled! if frontend_http_disabled?
       if params[:input_sequence]
         @input_sequence = params[:input_sequence]
         erb :search, layout: settings.layout
@@ -187,6 +196,7 @@ module SequenceServer
     # Returns base HTML. Rest happens client-side: polling for and rendering
     # the results.
     get '/:jid' do |jid|
+      halt_frontend_disabled! if frontend_http_disabled?
       job = Job.fetch(jid)
       halt 404, File.read(File.join(settings.root, 'public/404.html')) if job.nil?
 
@@ -423,6 +433,14 @@ module SequenceServer
 
     def frontend_build_dir
       File.expand_path(File.join(settings.root, 'sequenceserver-web', 'dist'))
+    end
+
+    def frontend_http_disabled?
+      SequenceServer.config[:api_only]
+    end
+
+    def halt_frontend_disabled!
+      halt 404, 'Frontend is disabled in API-only mode.'
     end
 
     def frontend_entry_path

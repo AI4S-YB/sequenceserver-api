@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { buildAlignmentExport, buildHspStats, formatPairwiseAlignment, type BlastAlgorithm } from '../lib/blast-alignment'
+import { useI18n } from '../lib/i18n'
 import { exportSvgElement, exportSvgElementAsPng } from '../lib/svg-export'
 import type { BlastHitPreview } from '../lib/job-results'
 
@@ -84,7 +85,7 @@ function polygonPoints(
   ].join(' ')
 }
 
-function buildAxisTicks(sequenceLength: number, reverse: boolean) {
+function buildAxisTicks(sequenceLength: number, reverse: boolean, locale: 'zh-CN' | 'en') {
   const safeLength = Math.max(sequenceLength, 1)
   const positions = [0, 0.25, 0.5, 0.75, 1]
 
@@ -95,7 +96,7 @@ function buildAxisTicks(sequenceLength: number, reverse: boolean) {
 
     return {
       position,
-      label: new Intl.NumberFormat('zh-CN').format(value),
+      label: new Intl.NumberFormat(locale).format(value),
     }
   })
 }
@@ -111,6 +112,7 @@ export function BlastAlignmentViewer({
   algorithm: BlastAlgorithm
   queryLength?: number
 }) {
+  const { isChinese, locale } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const [selectedHspIndex, setSelectedHspIndex] = useState(0)
   const [lineWidth, setLineWidth] = useState<number>(90)
@@ -120,29 +122,38 @@ export function BlastAlignmentViewer({
   const safeSelectedHspIndex = Math.min(selectedHspIndex, Math.max(0, hit.hsps.length - 1))
   const selectedHsp = hit.hsps[safeSelectedHspIndex]
   const computedQueryLength = useMemo(() => {
+    if (!expanded && typeof queryLength === 'number' && queryLength > 0) return queryLength
     if (typeof queryLength === 'number' && queryLength > 0) return queryLength
     return hit.hsps.reduce((max, hsp) => Math.max(max, hsp.qstart ?? 0, hsp.qend ?? 0), 1)
-  }, [hit.hsps, queryLength])
+  }, [expanded, hit.hsps, queryLength])
   const computedSubjectLength = useMemo(() => {
+    if (!expanded && typeof hit.length === 'number' && hit.length > 0) return hit.length
     if (typeof hit.length === 'number' && hit.length > 0) return hit.length
     return hit.hsps.reduce((max, hsp) => Math.max(max, hsp.sstart ?? 0, hsp.send ?? 0), 1)
-  }, [hit.hsps, hit.length])
+  }, [expanded, hit.hsps, hit.length])
   const queryReverse = (hit.hsps[0]?.qframe ?? 1) < 0
   const subjectReverse = (hit.hsps[0]?.sframe ?? 1) < 0
   const alignmentText = useMemo(
-    () => (selectedHsp ? formatPairwiseAlignment(selectedHsp, algorithm, lineWidth) : '当前命中没有 HSP。'),
-    [algorithm, lineWidth, selectedHsp],
-  )
-  const exportText = useMemo(
-    () => buildAlignmentExport(queryId, hit.id, hit.hsps, algorithm, lineWidth),
-    [algorithm, hit.hsps, hit.id, lineWidth, queryId],
+    () => {
+      if (!expanded) return ''
+      return selectedHsp
+        ? formatPairwiseAlignment(selectedHsp, algorithm, lineWidth, locale)
+        : (isChinese ? '当前命中没有 HSP。' : 'No HSP is available for this hit.')
+    },
+    [algorithm, expanded, isChinese, lineWidth, locale, selectedHsp],
   )
   const maxBitScore = useMemo(
-    () => Math.max(...hit.hsps.map((hsp) => hsp.bitScore ?? 0), 1),
-    [hit.hsps],
+    () => (expanded ? Math.max(...hit.hsps.map((hsp) => hsp.bitScore ?? 0), 1) : 1),
+    [expanded, hit.hsps],
   )
-  const queryTicks = useMemo(() => buildAxisTicks(computedQueryLength, queryReverse), [computedQueryLength, queryReverse])
-  const subjectTicks = useMemo(() => buildAxisTicks(computedSubjectLength, subjectReverse), [computedSubjectLength, subjectReverse])
+  const queryTicks = useMemo(
+    () => (expanded ? buildAxisTicks(computedQueryLength, queryReverse, locale) : []),
+    [computedQueryLength, expanded, locale, queryReverse],
+  )
+  const subjectTicks = useMemo(
+    () => (expanded ? buildAxisTicks(computedSubjectLength, subjectReverse, locale) : []),
+    [computedSubjectLength, expanded, locale, subjectReverse],
+  )
 
   async function handleGraphicExport(type: 'svg' | 'png') {
     if (!graphRef.current) return
@@ -152,16 +163,16 @@ export function BlastAlignmentViewer({
       if (type === 'svg') {
         exportSvgElement(graphRef.current, filename)
       } else {
-        await exportSvgElementAsPng(graphRef.current, filename)
+        await exportSvgElementAsPng(graphRef.current, filename, locale)
       }
-      setExportMessage(`图形对齐概览已导出为 ${type.toUpperCase()}。`)
+      setExportMessage(isChinese ? `图形对齐概览已导出为 ${type.toUpperCase()}。` : `Graphic alignment overview exported as ${type.toUpperCase()}.`)
     } catch (error) {
-      setExportMessage(error instanceof Error ? error.message : '图形对齐导出失败。')
+      setExportMessage(error instanceof Error ? error.message : (isChinese ? '图形对齐导出失败。' : 'Failed to export the graphic alignment overview.'))
     }
   }
 
   if (!hit.hsps.length) {
-    return <p className="toolbar-note">当前命中没有 HSP，无法展开 alignment。</p>
+    return <p className="toolbar-note">{isChinese ? '当前命中没有 HSP，无法展开 alignment。' : 'This hit has no HSP, so the alignment view cannot be expanded.'}</p>
   }
 
   return (
@@ -173,11 +184,12 @@ export function BlastAlignmentViewer({
             onClick={() => setExpanded((current) => !current)}
             type="button"
           >
-            {expanded ? '收起 alignment' : '查看 alignment'}
+            {expanded ? (isChinese ? '收起 alignment' : 'Collapse Alignment') : (isChinese ? '查看 alignment' : 'View Alignment')}
           </button>
           <button
             className="secondary-button"
             onClick={() => {
+              const exportText = buildAlignmentExport(queryId, hit.id, hit.hsps, algorithm, lineWidth, locale)
               downloadTextFile(
                 exportText,
                 `${sanitizeFilename(queryId)}__${sanitizeFilename(hit.id)}__alignment.txt`,
@@ -185,25 +197,25 @@ export function BlastAlignmentViewer({
             }}
             type="button"
           >
-            导出全部 HSP 文本
+            {isChinese ? '导出全部 HSP 文本' : 'Export All HSP Text'}
           </button>
           {selectedHsp ? (
             <button
               className="secondary-button"
               onClick={() => {
                 downloadTextFile(
-                  buildAlignmentExport(queryId, hit.id, [selectedHsp], algorithm, lineWidth),
+                  buildAlignmentExport(queryId, hit.id, [selectedHsp], algorithm, lineWidth, locale),
                   `${sanitizeFilename(queryId)}__${sanitizeFilename(hit.id)}__hsp_${selectedHsp.number ?? safeSelectedHspIndex + 1}.txt`,
                 )
               }}
               type="button"
             >
-              导出当前 HSP
+              {isChinese ? '导出当前 HSP' : 'Export Current HSP'}
             </button>
           ) : null}
         </div>
         <div className="toolbar-group">
-          <span className="toolbar-note">HSP 数量：{hit.hsps.length}</span>
+          <span className="toolbar-note">{isChinese ? 'HSP 数量' : 'HSP Count'}：{hit.hsps.length}</span>
         </div>
       </div>
 
@@ -212,9 +224,11 @@ export function BlastAlignmentViewer({
           <div className="visual-card alignment-graphic-card">
             <div className="toolbar">
               <div className="toolbar-group">
-                <strong>图形对齐概览</strong>
+                <strong>{isChinese ? '图形对齐概览' : 'Graphic Alignment Overview'}</strong>
                 <span className="toolbar-note">
-                  选中多边形可切换 HSP。Query {queryReverse ? '反向轴' : '正向轴'}，Subject {subjectReverse ? '反向轴' : '正向轴'}。
+                  {isChinese
+                    ? `选中多边形可切换 HSP。Query ${queryReverse ? '反向轴' : '正向轴'}，Subject ${subjectReverse ? '反向轴' : '正向轴'}。`
+                    : `Select a polygon to switch HSP. Query uses a ${queryReverse ? 'reverse' : 'forward'} axis and Subject uses a ${subjectReverse ? 'reverse' : 'forward'} axis.`}
                 </span>
               </div>
               <div className="toolbar-group">
@@ -224,14 +238,14 @@ export function BlastAlignmentViewer({
                 <button className="secondary-button" onClick={() => void handleGraphicExport('png')} type="button">
                   PNG
                 </button>
-                <span className="legend-chip legend-chip-weak">低 bit score</span>
-                <span className="legend-chip legend-chip-strong">高 bit score</span>
+                <span className="legend-chip legend-chip-weak">{isChinese ? '低 bit score' : 'Low Bit Score'}</span>
+                <span className="legend-chip legend-chip-strong">{isChinese ? '高 bit score' : 'High Bit Score'}</span>
               </div>
             </div>
             {exportMessage ? <p className="toolbar-note">{exportMessage}</p> : null}
             <div className="visual-scroll">
               <svg
-                aria-label="单个 hit 的图形对齐概览"
+                aria-label={isChinese ? '单个 hit 的图形对齐概览' : 'Graphic alignment overview for a single hit'}
                 className="overview-chart"
                 ref={graphRef}
                 viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
@@ -262,10 +276,10 @@ export function BlastAlignmentViewer({
                   Subject
                 </text>
                 <text className="graph-axis-title" textAnchor="end" x={GRAPH_WIDTH - 12} y={24}>
-                  {queryId} ({new Intl.NumberFormat('zh-CN').format(computedQueryLength)})
+                  {queryId} ({new Intl.NumberFormat(locale).format(computedQueryLength)})
                 </text>
                 <text className="graph-axis-title" textAnchor="end" x={GRAPH_WIDTH - 12} y={GRAPH_HEIGHT - 12}>
-                  {hit.id} ({new Intl.NumberFormat('zh-CN').format(computedSubjectLength)})
+                  {hit.id} ({new Intl.NumberFormat(locale).format(computedSubjectLength)})
                 </text>
 
                 {queryTicks.map((tick) => {
@@ -356,7 +370,9 @@ export function BlastAlignmentViewer({
               </svg>
             </div>
             <p className="metric-helper">
-              颜色越深表示 bit score 越高；当前高亮 HSP 会同步更新下方文本 alignment 和统计信息。
+              {isChinese
+                ? '颜色越深表示 bit score 越高；当前高亮 HSP 会同步更新下方文本 alignment 和统计信息。'
+                : 'Darker color indicates a higher bit score. The highlighted HSP also updates the text alignment and statistics below.'}
             </p>
           </div>
 
@@ -374,7 +390,7 @@ export function BlastAlignmentViewer({
               ))}
             </div>
             <div className="toolbar-group">
-              <span className="toolbar-note">每行字符</span>
+              <span className="toolbar-note">{isChinese ? '每行字符' : 'Characters Per Line'}</span>
               {LINE_WIDTH_OPTIONS.map((size) => (
                 <button
                   className={lineWidth === size ? 'secondary-button active' : 'secondary-button'}
@@ -393,31 +409,31 @@ export function BlastAlignmentViewer({
               <div className="key-value-grid">
                 {buildHspStats(selectedHsp, algorithm).map((item) => (
                   <div className="key-value-item" key={item}>
-                    <span>统计</span>
+                    <span>{isChinese ? '统计' : 'Stat'}</span>
                     <strong>{item}</strong>
                   </div>
                 ))}
                 <div className="key-value-item">
-                  <span>Query 范围</span>
+                  <span>{isChinese ? 'Query 范围' : 'Query Range'}</span>
                   <strong>
                     {selectedHsp.qstart ?? '-'} - {selectedHsp.qend ?? '-'}
                   </strong>
                 </div>
                 <div className="key-value-item">
-                  <span>Subject 范围</span>
+                  <span>{isChinese ? 'Subject 范围' : 'Subject Range'}</span>
                   <strong>
                     {selectedHsp.sstart ?? '-'} - {selectedHsp.send ?? '-'}
                   </strong>
                 </div>
                 <div className="key-value-item">
-                  <span>当前命中长度</span>
-                  <strong>{new Intl.NumberFormat('zh-CN').format(computedSubjectLength)}</strong>
+                  <span>{isChinese ? '当前命中长度' : 'Current Hit Length'}</span>
+                  <strong>{new Intl.NumberFormat(locale).format(computedSubjectLength)}</strong>
                 </div>
               </div>
               <pre className="alignment-box">{alignmentText}</pre>
             </>
           ) : (
-            <p>当前命中没有可渲染的 HSP。</p>
+            <p>{isChinese ? '当前命中没有可渲染的 HSP。' : 'This hit has no renderable HSP.'}</p>
           )}
         </div>
       ) : null}

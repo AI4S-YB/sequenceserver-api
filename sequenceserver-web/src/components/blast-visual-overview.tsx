@@ -1,6 +1,7 @@
 import { useRef, useState, type RefObject } from 'react'
 import { BlastCircosOverview } from './blast-circos-overview'
 import { exportSvgElement, exportSvgElementAsPng } from '../lib/svg-export'
+import { useI18n } from '../lib/i18n'
 import type { BlastHitPreview, BlastQueryPreview, BlastResultSummary } from '../lib/job-results'
 
 const QUERY_BAR_WIDTH = 36
@@ -12,8 +13,8 @@ const HISTOGRAM_WIDTH = 760
 const HISTOGRAM_HEIGHT = 220
 const HISTOGRAM_BINS = 8
 
-function formatLabel(value?: number): string {
-  return typeof value === 'number' ? new Intl.NumberFormat('zh-CN').format(value) : '-'
+function formatLabel(value: number | undefined, locale: 'zh-CN' | 'en'): string {
+  return typeof value === 'number' ? new Intl.NumberFormat(locale).format(value) : '-'
 }
 
 function maxOrFallback(values: number[], fallback: number): number {
@@ -58,6 +59,7 @@ export function BlastVisualOverview({
   summary: BlastResultSummary
   selectedQuery: BlastQueryPreview | null
 }) {
+  const { isChinese, locale } = useI18n()
   const queryChartRef = useRef<SVGSVGElement | null>(null)
   const alignmentChartRef = useRef<SVGSVGElement | null>(null)
   const histogramChartRef = useRef<SVGSVGElement | null>(null)
@@ -87,18 +89,22 @@ export function BlastVisualOverview({
       if (type === 'svg') {
         exportSvgElement(ref.current, filename)
       } else {
-        await exportSvgElementAsPng(ref.current, filename)
+        await exportSvgElementAsPng(ref.current, filename, locale)
       }
-      setExportMessage(`${label} 已导出为 ${type.toUpperCase()}。`)
+      setExportMessage(isChinese ? `${label} 已导出为 ${type.toUpperCase()}。` : `${label} exported as ${type.toUpperCase()}.`)
     } catch (error) {
-      setExportMessage(error instanceof Error ? error.message : `${label} 导出失败。`)
+      setExportMessage(error instanceof Error ? error.message : (isChinese ? `${label} 导出失败。` : `Failed to export ${label}.`))
     }
   }
 
   return (
     <div className="result-box">
-      <h4>图形概览</h4>
-      <p className="toolbar-note">先补上新前端自己的可视化层，用于覆盖旧结果页最常用的图形概览能力。</p>
+      <h4>{isChinese ? '图形概览' : 'Visual Overview'}</h4>
+      <p className="toolbar-note">
+        {isChinese
+          ? '新前端已经补上自己的可视化层，用于覆盖旧结果页最常用的图形概览能力。'
+          : 'The new frontend now includes its own visualization layer to cover the most common overview graphics from the legacy result page.'}
+      </p>
       {exportMessage ? <p className="toolbar-note">{exportMessage}</p> : null}
 
       <div className="visual-grid">
@@ -106,18 +112,32 @@ export function BlastVisualOverview({
 
         <div className="visual-card">
           <div className="visual-card-header">
-            <h5>Query 命中分布</h5>
+            <h5>{isChinese ? 'Query 命中分布' : 'Query Hit Distribution'}</h5>
             <div className="toolbar-group">
               <button
                 className="secondary-button"
-                onClick={() => handleExport(queryChartRef, 'svg', `${summary.searchId || 'blast'}__query_hit_overview`, 'Query 命中分布')}
+                onClick={() =>
+                  handleExport(
+                    queryChartRef,
+                    'svg',
+                    `${summary.searchId || 'blast'}__query_hit_overview`,
+                    isChinese ? 'Query 命中分布' : 'Query Hit Distribution',
+                  )
+                }
                 type="button"
               >
                 SVG
               </button>
               <button
                 className="secondary-button"
-                onClick={() => handleExport(queryChartRef, 'png', `${summary.searchId || 'blast'}__query_hit_overview`, 'Query 命中分布')}
+                onClick={() =>
+                  handleExport(
+                    queryChartRef,
+                    'png',
+                    `${summary.searchId || 'blast'}__query_hit_overview`,
+                    isChinese ? 'Query 命中分布' : 'Query Hit Distribution',
+                  )
+                }
                 type="button"
               >
                 PNG
@@ -126,7 +146,7 @@ export function BlastVisualOverview({
           </div>
           <div className="visual-scroll">
             <svg
-              aria-label="Query 命中分布图"
+              aria-label={isChinese ? 'Query 命中分布图' : 'Query hit distribution chart'}
               className="overview-chart"
               height={QUERY_CHART_HEIGHT}
               ref={queryChartRef}
@@ -162,12 +182,16 @@ export function BlastVisualOverview({
               })}
             </svg>
           </div>
-          <p className="metric-helper">横轴是 query 顺序，纵轴是命中数量。当前选中的 query 会高亮。</p>
+          <p className="metric-helper">
+            {isChinese
+              ? '横轴是 query 顺序，纵轴是命中数量。当前选中的 query 会高亮。'
+              : 'The x-axis shows query order and the y-axis shows hit counts. The selected query is highlighted.'}
+          </p>
         </div>
 
         <div className="visual-card">
           <div className="visual-card-header">
-            <h5>当前 Query 对齐概览</h5>
+            <h5>{isChinese ? '当前 Query 对齐概览' : 'Current Query Alignment Overview'}</h5>
             <div className="toolbar-group">
               <button
                 className="secondary-button"
@@ -177,7 +201,7 @@ export function BlastVisualOverview({
                     alignmentChartRef,
                     'svg',
                     `${summary.searchId || 'blast'}__${selectedQuery?.id || 'query'}__alignment_overview`,
-                    '当前 Query 对齐概览',
+                    isChinese ? '当前 Query 对齐概览' : 'Current Query Alignment Overview',
                   )
                 }
                 type="button"
@@ -192,7 +216,7 @@ export function BlastVisualOverview({
                     alignmentChartRef,
                     'png',
                     `${summary.searchId || 'blast'}__${selectedQuery?.id || 'query'}__alignment_overview`,
-                    '当前 Query 对齐概览',
+                    isChinese ? '当前 Query 对齐概览' : 'Current Query Alignment Overview',
                   )
                 }
                 type="button"
@@ -205,7 +229,7 @@ export function BlastVisualOverview({
             <>
               <div className="visual-scroll">
                 <svg
-                  aria-label="当前 Query 对齐概览图"
+                  aria-label={isChinese ? '当前 Query 对齐概览图' : 'Current query alignment overview chart'}
                   className="overview-chart"
                   height={alignmentHeight}
                   ref={alignmentChartRef}
@@ -241,17 +265,19 @@ export function BlastVisualOverview({
                 </svg>
               </div>
               <p className="metric-helper">
-                以 query 坐标显示当前 query 前 12 个命中的首个 HSP 范围。query 长度：{formatLabel(selectedQuery.length)}。
+                {isChinese
+                  ? `以 query 坐标显示当前 query 前 12 个命中的首个 HSP 范围。query 长度：${formatLabel(selectedQuery.length, locale)}。`
+                  : `Shows the first HSP span for the top 12 hits using query coordinates. Query length: ${formatLabel(selectedQuery.length, locale)}.`}
               </p>
             </>
           ) : (
-            <p>当前没有可展示的 query。</p>
+            <p>{isChinese ? '当前没有可展示的 query。' : 'No query is available for visualization.'}</p>
           )}
         </div>
 
         <div className="visual-card">
           <div className="visual-card-header">
-            <h5>命中长度分布</h5>
+            <h5>{isChinese ? '命中长度分布' : 'Hit Length Distribution'}</h5>
             <div className="toolbar-group">
               <button
                 className="secondary-button"
@@ -261,7 +287,7 @@ export function BlastVisualOverview({
                     histogramChartRef,
                     'svg',
                     `${summary.searchId || 'blast'}__${selectedQuery?.id || 'query'}__hit_length_histogram`,
-                    '命中长度分布',
+                    isChinese ? '命中长度分布' : 'Hit Length Distribution',
                   )
                 }
                 type="button"
@@ -276,7 +302,7 @@ export function BlastVisualOverview({
                     histogramChartRef,
                     'png',
                     `${summary.searchId || 'blast'}__${selectedQuery?.id || 'query'}__hit_length_histogram`,
-                    '命中长度分布',
+                    isChinese ? '命中长度分布' : 'Hit Length Distribution',
                   )
                 }
                 type="button"
@@ -289,7 +315,7 @@ export function BlastVisualOverview({
             <>
               <div className="visual-scroll">
                 <svg
-                  aria-label="命中长度分布图"
+                  aria-label={isChinese ? '命中长度分布图' : 'Hit length distribution chart'}
                   className="overview-chart"
                   height={HISTOGRAM_HEIGHT}
                   ref={histogramChartRef}
@@ -325,11 +351,13 @@ export function BlastVisualOverview({
                 </svg>
               </div>
               <p className="metric-helper">
-                按命中长度做 8 档分箱。当前 query：{selectedQuery.id}，命中数 {formatLabel(selectedQuery.hitCount)}。
+                {isChinese
+                  ? `按命中长度做 8 档分箱。当前 query：${selectedQuery.id}，命中数 ${formatLabel(selectedQuery.hitCount, locale)}。`
+                  : `Hit lengths are grouped into 8 bins. Current query: ${selectedQuery.id}, hits: ${formatLabel(selectedQuery.hitCount, locale)}.`}
               </p>
             </>
           ) : (
-            <p>当前 query 没有足够的命中长度数据。</p>
+            <p>{isChinese ? '当前 query 没有足够的命中长度数据。' : 'The current query does not have enough hit-length data.'}</p>
           )}
         </div>
       </div>

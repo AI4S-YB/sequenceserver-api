@@ -12,12 +12,21 @@ export interface BlastQueryPreview {
 
 export interface BlastHitPreview {
   id: string
+  accession?: string
   title: string
   length?: number
   totalScore?: number
   qcovs?: number
   sciname?: string
+  links: BlastHitLink[]
   hsps: BlastHspPreview[]
+}
+
+export interface BlastHitLink {
+  title: string
+  url: string
+  icon?: string
+  className?: string
 }
 
 export interface BlastHspPreview {
@@ -66,14 +75,27 @@ function summarizeBlastHsp(item: JsonRecord): BlastHspPreview {
 
 function summarizeBlastHit(item: JsonRecord): BlastHitPreview {
   const hsps = Array.isArray(item.hsps) ? item.hsps.filter(isRecord).map(summarizeBlastHsp) : []
+  const links = Array.isArray(item.links)
+    ? item.links
+        .filter(isRecord)
+        .map((link) => ({
+          title: asString(link.title) || '',
+          url: asString(link.url) || '',
+          icon: asString(link.icon),
+          className: asString(link.class),
+        }))
+        .filter((link) => link.title && link.url)
+    : []
 
   return {
     id: asString(item.id) || '未命名命中',
+    accession: asString(item.accession),
     title: asString(item.title) || '-',
     length: asNumber(item.length),
     totalScore: asNumber(item.total_score),
     qcovs: asNumber(item.qcovs),
     sciname: asString(item.sciname),
+    links,
     hsps,
   }
 }

@@ -61,6 +61,12 @@ VITE_API_BASE_URL=http://127.0.0.1:4567
 
 ## 启动方式
 
+当前项目默认内置：
+
+- 项目内置数据库目录：`../data/blast-db`
+- BLAST 搜索页示例序列：`../data/examples/blast-query`
+- 默认本地后端配置：`../config/sequenceserver.local.conf`
+
 ### 1. 安装依赖
 
 ```bash
@@ -90,7 +96,7 @@ npm run dev
 默认前端开发地址通常为：
 
 ```bash
-http://127.0.0.1:5173
+http://127.0.0.1:5174
 ```
 
 ### 4. 构建生产包
@@ -125,8 +131,8 @@ npm run test
 
 ```yaml
 allowed_origins:
-  - http://127.0.0.1:5173
-  - http://localhost:5173
+  - http://127.0.0.1:5174
+  - http://localhost:5174
 ```
 
 如果以后前端部署到其他域名，也需要把对应来源加入这里。

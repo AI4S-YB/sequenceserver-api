@@ -1,5 +1,6 @@
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const XLINK_NS = 'http://www.w3.org/1999/xlink'
+type ExportLocale = 'zh-CN' | 'en'
 const EXPORT_STYLE_PROPS = [
   'fill',
   'fill-opacity',
@@ -97,7 +98,11 @@ export function exportSvgElement(svg: SVGSVGElement, filenamePrefix: string) {
   downloadBlob(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }), filename)
 }
 
-export async function exportSvgElementAsPng(svg: SVGSVGElement, filenamePrefix: string) {
+export async function exportSvgElementAsPng(
+  svg: SVGSVGElement,
+  filenamePrefix: string,
+  locale: ExportLocale = 'zh-CN',
+) {
   const { markup, width, height } = serializeSvg(svg)
   const blob = new Blob([markup], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -106,7 +111,8 @@ export async function exportSvgElementAsPng(svg: SVGSVGElement, filenamePrefix: 
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image()
       element.onload = () => resolve(element)
-      element.onerror = () => reject(new Error('无法加载 SVG 图像，PNG 导出失败。'))
+      element.onerror = () =>
+        reject(new Error(locale === 'zh-CN' ? '无法加载 SVG 图像，PNG 导出失败。' : 'Failed to load the SVG image for PNG export.'))
       element.src = url
     })
 
@@ -117,7 +123,7 @@ export async function exportSvgElementAsPng(svg: SVGSVGElement, filenamePrefix: 
 
     const context = canvas.getContext('2d')
     if (!context) {
-      throw new Error('浏览器不支持 Canvas 2D，上图无法导出为 PNG。')
+      throw new Error(locale === 'zh-CN' ? '浏览器不支持 Canvas 2D，上图无法导出为 PNG。' : 'Canvas 2D is not supported in this browser, so PNG export is unavailable.')
     }
 
     context.scale(scale, scale)
@@ -128,7 +134,7 @@ export async function exportSvgElementAsPng(svg: SVGSVGElement, filenamePrefix: 
     const pngBlob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((canvasBlob) => {
         if (canvasBlob) resolve(canvasBlob)
-        else reject(new Error('PNG 编码失败。'))
+        else reject(new Error(locale === 'zh-CN' ? 'PNG 编码失败。' : 'Failed to encode the PNG image.'))
       }, 'image/png')
     })
 

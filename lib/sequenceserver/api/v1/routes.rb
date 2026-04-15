@@ -10,6 +10,20 @@ module SequenceServer
         def self.registered(app)
           app.helpers SequenceServer::API::V1::Helpers
 
+          app.get '/api' do
+            redirect to('/api/docs')
+          end
+
+          app.get '/api/openapi.json' do
+            content_type :json
+            send_file(File.join(settings.root, 'docs', 'openapi.json'))
+          end
+
+          app.get '/api/docs' do
+            content_type :html
+            send_file(File.join(settings.root, 'docs', 'swagger.html'))
+          end
+
           app.before '/api/v1/*' do
             origin = cors_origin
             if origin

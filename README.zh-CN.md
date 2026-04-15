@@ -73,50 +73,82 @@
 
 ## 快速开始
 
-### 1. 启动后端
+### 1. 开发环境启动
 
-如果你在本地从源码运行：
+推荐直接使用仓库内脚本：
+
+```bash
+bash scripts/dev-start.sh
+```
+
+开发脚本会同时启动：
+
+- 后端：`http://127.0.0.1:4567`
+- 前端：`http://127.0.0.1:5174`
+- 前端使用 Vite 开发服务器，修改前端代码后可即时热更新
+- 后端默认使用 `config/sequenceserver.local.conf`
+- 默认数据库目录使用项目内置的 `data/blast-db`
+- BLAST 搜索页默认示例序列使用项目内置的拟南芥 mRNA / 蛋白示例
+
+说明：
+
+- 前端改动可以立即看到
+- Ruby 后端代码改动仍需要重启开发脚本
+- 如需切换开发配置文件，可设置环境变量 `SEQUENCESERVER_DEV_CONFIG=/path/to/your.conf`
+
+### 2. 生产环境启动
+
+```bash
+bash scripts/prod-start.sh
+```
+
+生产脚本会：
+
+- 先构建 `sequenceserver-web/dist`
+- 再启动 Ruby 后端
+- 默认让前端通过同域相对路径访问 `/api/v1/*`
+
+可选环境变量：
+
+- `SEQUENCESERVER_PROD_CONFIG=/path/to/prod.conf`
+- `PROD_VITE_API_BASE_URL=https://your-api.example.org`
+- `SKIP_FRONTEND_BUILD=1`
+
+### 3. 手动启动方式
+
+如果你希望分别手动启动，也可以：
 
 ```bash
 bundle install
 bundle exec bin/sequenceserver
 ```
 
-默认后端地址通常是：
-
-```bash
-http://127.0.0.1:4567
-```
-
-### 2. 启动独立前端
-
 ```bash
 cd sequenceserver-web
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-默认前端开发地址通常是：
+当前前端默认开发地址已固定为：
 
 ```bash
-http://127.0.0.1:5173
+http://127.0.0.1:5174
 ```
 
-### 3. 配置跨域
+### 4. 配置跨域
 
 后端配置文件：
 
 ```yaml
-~/.sequenceserver.conf
+config/sequenceserver.local.conf
 ```
 
 建议至少加入：
 
 ```yaml
 allowed_origins:
-  - http://127.0.0.1:5173
-  - http://localhost:5173
+  - http://127.0.0.1:5174
+  - http://localhost:5174
 ```
 
 ## 部署与联调文档
@@ -131,6 +163,8 @@ allowed_origins:
 - [docs/frontend-release-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-release-checklist.zh-CN.md)
 - [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
 - [docs/frontend-replacement-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-replacement-checklist.zh-CN.md)
+- [docs/frontend-live-smoke-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-live-smoke-report.zh-CN.md)
+- [docs/frontend-manual-acceptance-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-manual-acceptance-checklist.zh-CN.md)
 
 ## 当前还未完成的重点
 
@@ -169,6 +203,8 @@ See LICENSE.txt and COPYRIGHT.txt for upstream and derivative-work notices.
 
 ## 相关目录
 
+- 项目内置示例数据：
+  - [data](/Users/kentnf/projects/omicsagent/sequenceserver/data)
 - 后端 API：
   - [lib/sequenceserver/api/v1/routes.rb](/Users/kentnf/projects/omicsagent/sequenceserver/lib/sequenceserver/api/v1/routes.rb)
 - 独立前端：

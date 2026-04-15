@@ -25,6 +25,15 @@ module SequenceServer
         expect(last_response.content_type).to include('text/html')
         expect(last_response.body).to include('<div id="root"></div>')
       end
+
+      it 'returns 404 when api_only mode is enabled' do
+        SequenceServer.init(database_dir: "#{__dir__}/database/v5/sample", api_only: true)
+
+        get '/'
+
+        expect(last_response.status).to eq(404)
+        expect(last_response.body).to include('Frontend is disabled in API-only mode.')
+      end
     end
 
     context 'GET /databases' do
@@ -34,6 +43,15 @@ module SequenceServer
         expect(last_response.status).to eq(200)
         expect(last_response.content_type).to include('text/html')
         expect(last_response.body).to include('<div id="root"></div>')
+      end
+
+      it 'returns 404 when api_only mode is enabled' do
+        SequenceServer.init(database_dir: "#{__dir__}/database/v5/sample", api_only: true)
+
+        get '/databases'
+
+        expect(last_response.status).to eq(404)
+        expect(last_response.body).to include('Frontend is disabled in API-only mode.')
       end
     end
 
@@ -85,6 +103,21 @@ module SequenceServer
         expect(last_response.status).to eq(200)
         expect(last_response.body).to include('<div id="view"')
         expect(last_response.body).to include('sequenceserver-report.min.js')
+      end
+
+      it 'returns 404 in api_only mode' do
+        job = SequenceServer::BLAST::Job.new(
+          sequence: ">test\nACGT",
+          databases: [Database.first.id],
+          method: (Database.first.type == 'protein' ? 'blastp' : 'blastn')
+        )
+
+        SequenceServer.init(database_dir: "#{__dir__}/database/v5/sample", api_only: true)
+
+        get "/#{job.id}"
+
+        expect(last_response.status).to eq(404)
+        expect(last_response.body).to include('Frontend is disabled in API-only mode.')
       end
     end
 

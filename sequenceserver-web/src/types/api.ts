@@ -48,11 +48,18 @@ export interface BlastMethodOption {
   default_advanced: string
 }
 
+export interface BlastQueryExample {
+  label: string
+  query_type: 'nucleotide' | 'protein'
+  sequence: string
+}
+
 export interface BlastFormConfig {
   databases: Database[]
   methods: BlastMethodOption[]
   options: Record<string, Record<string, { description?: string | null; attributes: string[] }>>
   blast_task_map: Record<string, string[]>
+  query_examples: Partial<Record<string, BlastQueryExample>>
   database_tree?: unknown
 }
 

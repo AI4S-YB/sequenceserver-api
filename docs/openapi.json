@@ -1,0 +1,1427 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SequenceServer API",
+    "version": "1.0.0",
+    "description": "SequenceServer API for database management, BLAST job submission, result retrieval, and frontend configuration."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Docs",
+      "description": "API discovery and interactive documentation"
+    },
+    {
+      "name": "Frontend",
+      "description": "Frontend bootstrap metadata"
+    },
+    {
+      "name": "Databases",
+      "description": "Database listing, creation, indexing, and deletion"
+    },
+    {
+      "name": "Sequences",
+      "description": "Sequence lookup and FASTA download"
+    },
+    {
+      "name": "BLAST Jobs",
+      "description": "BLAST job submission, monitoring, result retrieval, and downloads"
+    },
+    {
+      "name": "Database Jobs",
+      "description": "Database indexing job monitoring"
+    }
+  ],
+  "paths": {
+    "/api": {
+      "get": {
+        "tags": ["Docs"],
+        "summary": "Redirect to Swagger UI",
+        "responses": {
+          "302": {
+            "description": "Redirect to /api/docs"
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "tags": ["Docs"],
+        "summary": "Get OpenAPI document",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docs": {
+      "get": {
+        "tags": ["Docs"],
+        "summary": "Open Swagger UI",
+        "responses": {
+          "200": {
+            "description": "Swagger UI HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/databases": {
+      "get": {
+        "tags": ["Databases"],
+        "summary": "List databases",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DatabaseListResponse"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Databases"],
+        "summary": "Create or import a database FASTA",
+        "description": "Supports JSON source import or multipart/form-data upload. The created FASTA can optionally be auto-indexed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseCreateRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/DatabaseCreateResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}/index": {
+      "post": {
+        "tags": ["Databases"],
+        "summary": "Create a database indexing job",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DatabaseId"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseIndexRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/databases/{id}": {
+      "delete": {
+        "tags": ["Databases"],
+        "summary": "Delete a database and its index files",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DatabaseId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DatabaseDeleteResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/frontend/blast_form": {
+      "get": {
+        "tags": ["Frontend"],
+        "summary": "Get BLAST form bootstrap metadata",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BlastFormConfigResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/sequences": {
+      "get": {
+        "tags": ["Sequences"],
+        "summary": "Lookup sequences by id",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SequenceIds"
+          },
+          {
+            "$ref": "#/components/parameters/DatabaseIds"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/SequenceLookupResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/sequences/download": {
+      "get": {
+        "tags": ["Sequences"],
+        "summary": "Download sequences as FASTA",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SequenceIds"
+          },
+          {
+            "$ref": "#/components/parameters/DatabaseIds"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "FASTA file download",
+            "content": {
+              "text/fasta": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Sequences"],
+        "summary": "Download sequences as FASTA using JSON payload",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceLookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "FASTA file download",
+            "content": {
+              "text/fasta": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs": {
+      "get": {
+        "tags": ["BLAST Jobs"],
+        "summary": "List BLAST jobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobStatus"
+          },
+          {
+            "$ref": "#/components/parameters/JobLimit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobListResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      },
+      "post": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Create a BLAST job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlastJobCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs/{id}": {
+      "get": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Get BLAST job metadata",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs/{id}/input": {
+      "get": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Get original BLAST input",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/BlastJobInputResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs/{id}/cancel": {
+      "post": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Cancel a BLAST job",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs/{id}/logs/{stream}": {
+      "get": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Get BLAST job logs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/LogStream"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobLogResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs/{id}/result": {
+      "get": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Get BLAST result",
+        "description": "Returns 202 with job metadata while queued or running. Returns a large-result warning document when the XML result is above the configured threshold.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BypassLargeResultWarning"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BLAST report JSON or large-result warning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/BlastReportEnvelope"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LargeResultWarningEnvelope"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "202": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/blast_jobs/{id}/download/{type}": {
+      "get": {
+        "tags": ["BLAST Jobs"],
+        "summary": "Download formatted BLAST result",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/BlastDownloadType"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Formatted download file",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/database_jobs": {
+      "get": {
+        "tags": ["Database Jobs"],
+        "summary": "List database indexing jobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobStatus"
+          },
+          {
+            "$ref": "#/components/parameters/JobLimit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobListResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/database_jobs/{id}": {
+      "get": {
+        "tags": ["Database Jobs"],
+        "summary": "Get database indexing job metadata",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/database_jobs/{id}/cancel": {
+      "post": {
+        "tags": ["Database Jobs"],
+        "summary": "Cancel a database indexing job",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "409": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/database_jobs/{id}/logs/{stream}": {
+      "get": {
+        "tags": ["Database Jobs"],
+        "summary": "Get database indexing job logs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "$ref": "#/components/parameters/LogStream"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JobLogResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/database_jobs/{id}/result": {
+      "get": {
+        "tags": ["Database Jobs"],
+        "summary": "Get database indexing result",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DatabaseResponse"
+          },
+          "202": {
+            "$ref": "#/components/responses/JobResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/ErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/ErrorResponse"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "DatabaseId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Database id, usually the database MD5 id"
+      },
+      "JobId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Job id"
+      },
+      "SequenceIds": {
+        "name": "sequence_ids",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Comma-separated sequence ids"
+      },
+      "DatabaseIds": {
+        "name": "database_ids",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Comma-separated database ids"
+      },
+      "JobStatus": {
+        "name": "status",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": ["queued", "running", "succeeded", "failed", "cancelled"]
+        }
+      },
+      "JobLimit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "LogStream": {
+        "name": "stream",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "enum": ["stdout", "stderr"]
+        }
+      },
+      "BypassLargeResultWarning": {
+        "name": "bypass_file_size_warning",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": ["true"]
+        }
+      },
+      "BlastDownloadType": {
+        "name": "type",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "enum": ["pairwise", "qa", "qa_no_identity", "fqa", "fqa_no_identity", "xml", "std_tsv", "full_tsv", "custom_tsv", "asn_text", "asn_binary", "csv", "archive"]
+        }
+      }
+    },
+    "responses": {
+      "ErrorResponse": {
+        "description": "Error response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "DatabaseResponse": {
+        "description": "Single database envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/Database"
+                }
+              }
+            }
+          }
+        }
+      },
+      "DatabaseListResponse": {
+        "description": "Database list envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Database"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "DatabaseCreateResponse": {
+        "description": "Database creation result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/DatabaseCreateResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "DatabaseDeleteResponse": {
+        "description": "Database deletion result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/DatabaseDeleteResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "BlastFormConfigResponse": {
+        "description": "BLAST form metadata",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BlastFormConfig"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SequenceLookupResponse": {
+        "description": "Sequence lookup result",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/SequenceLookupResult"
+                }
+              }
+            }
+          }
+        }
+      },
+      "JobResponse": {
+        "description": "Single job envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          }
+        }
+      },
+      "JobListResponse": {
+        "description": "Job list envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Job"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "BlastJobInputResponse": {
+        "description": "BLAST input envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/BlastJobInput"
+                }
+              }
+            }
+          }
+        }
+      },
+      "JobLogResponse": {
+        "description": "Job log envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["data"],
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/JobLog"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Database": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "indexed": {
+            "type": "boolean"
+          },
+          "nsequences": {
+            "type": "integer"
+          },
+          "ncharacters": {
+            "type": "integer"
+          },
+          "updated_on": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "JobDatabase": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Database"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["blast", "database_index"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "succeeded", "failed", "cancelled"]
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "method": {
+            "type": ["string", "null"]
+          },
+          "databases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobDatabase"
+            }
+          },
+          "result_url": {
+            "type": ["string", "null"]
+          },
+          "log_urls": {
+            "type": "object",
+            "properties": {
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              }
+            }
+          },
+          "exitstatus": {
+            "type": ["integer", "null"]
+          },
+          "database_id": {
+            "type": ["string", "null"]
+          },
+          "title": {
+            "type": ["string", "null"]
+          },
+          "downloads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlastDownload"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "BlastDownload": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          }
+        }
+      },
+      "BlastJobInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "advanced": {
+            "type": "string"
+          },
+          "databases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Database"
+            }
+          },
+          "database_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DatabaseCreateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["nucleotide", "protein"]
+          },
+          "sequence": {
+            "type": "string"
+          },
+          "auto_index": {
+            "type": "boolean"
+          },
+          "taxid": {
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DatabaseImportSource"
+          }
+        }
+      },
+      "DatabaseUploadRequest": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary"
+          },
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["nucleotide", "protein"]
+          }
+        }
+      },
+      "DatabaseImportSource": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["local_path", "url", "s3"]
+          },
+          "path": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": ["type"]
+      },
+      "DatabaseCreateResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Database"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "index_job": {
+                "$ref": "#/components/schemas/Job"
+              }
+            }
+          }
+        ]
+      },
+      "DatabaseIndexRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["nucleotide", "protein"]
+          },
+          "taxid": {
+            "type": "integer"
+          }
+        }
+      },
+      "DatabaseDeleteResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "removed_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SequenceLookupRequest": {
+        "type": "object",
+        "required": ["sequence_ids", "database_ids"],
+        "properties": {
+          "sequence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "database_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SequenceRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "length": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "SequenceLookupResult": {
+        "type": "object",
+        "properties": {
+          "sequence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "database_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sequence_count": {
+            "type": "integer"
+          },
+          "sequences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SequenceRecord"
+            }
+          },
+          "error_msgs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "BlastMethod": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "query_type": {
+            "type": "string"
+          },
+          "database_type": {
+            "type": "string"
+          },
+          "helper": {
+            "type": "string"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "default_attributes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "default_advanced": {
+            "type": "string"
+          }
+        }
+      },
+      "BlastQueryExample": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "query_type": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "string"
+          }
+        }
+      },
+      "BlastFormConfig": {
+        "type": "object",
+        "properties": {
+          "databases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Database"
+            }
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlastMethod"
+            }
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "blast_task_map": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "database_tree": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "query_examples": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BlastQueryExample"
+            }
+          }
+        }
+      },
+      "BlastJobCreateRequest": {
+        "type": "object",
+        "required": ["sequence", "databases", "method"],
+        "properties": {
+          "sequence": {
+            "type": "string"
+          },
+          "databases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "method": {
+            "type": "string",
+            "enum": ["blastn", "blastp", "blastx", "tblastn", "tblastx"]
+          },
+          "advanced": {
+            "type": "string"
+          }
+        }
+      },
+      "JobLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stream": {
+            "type": "string",
+            "enum": ["stdout", "stderr"]
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "BlastReportEnvelope": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "BLAST report JSON payload from SequenceServer",
+            "additionalProperties": true
+          }
+        }
+      },
+      "LargeResultWarning": {
+        "type": "object",
+        "properties": {
+          "user_warning": {
+            "type": "string"
+          },
+          "warning_code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "xml_file_size": {
+            "type": "integer"
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "bypass_parameter": {
+            "type": "string"
+          },
+          "bypass_value": {
+            "type": "string"
+          },
+          "download_links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlastDownload"
+            }
+          }
+        }
+      },
+      "LargeResultWarningEnvelope": {
+        "type": "object",
+        "required": ["data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LargeResultWarning"
+          }
+        }
+      }
+    }
+  }
+}

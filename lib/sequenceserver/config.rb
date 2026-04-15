@@ -138,6 +138,7 @@ module SequenceServer
         allowed_import_urls: [],
         allowed_s3_buckets: [],
         allowed_origins: [],
+        api_only: false,
         # Warn in the UI before rendering results larger than this value
         large_result_warning_threshold: 250 * 1024 * 1024,
         optimistic: false # Faster, but does not perform DB compatibility checks

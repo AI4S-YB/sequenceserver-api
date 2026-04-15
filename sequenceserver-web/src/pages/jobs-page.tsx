@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { buildApiUrl, fetchBlastJobs, fetchDatabaseJobs } from '../lib/api'
+import { useI18n } from '../lib/i18n'
 import { formatCount } from '../lib/job-results'
 import type { Job, JobStatus } from '../types/api'
 
 type JobTab = 'blast' | 'database_index'
 
-const statusOptions: Array<{ value: '' | JobStatus; label: string }> = [
-  { value: '', label: '全部状态' },
-  { value: 'queued', label: 'queued' },
-  { value: 'running', label: 'running' },
-  { value: 'succeeded', label: 'succeeded' },
-  { value: 'failed', label: 'failed' },
-  { value: 'cancelled', label: 'cancelled' },
-]
+function statusOptions(isChinese: boolean): Array<{ value: '' | JobStatus; label: string }> {
+  return [
+    { value: '', label: isChinese ? '全部状态' : 'All Statuses' },
+    { value: 'queued', label: isChinese ? '排队中' : 'Queued' },
+    { value: 'running', label: isChinese ? '运行中' : 'Running' },
+    { value: 'succeeded', label: isChinese ? '已完成' : 'Succeeded' },
+    { value: 'failed', label: isChinese ? '失败' : 'Failed' },
+    { value: 'cancelled', label: isChinese ? '已取消' : 'Cancelled' },
+  ]
+}
 
 const limitOptions = [20, 50, 100] as const
 
@@ -27,6 +30,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 }
 
 function JobRow({ job }: { job: Job }) {
+  const { t, isChinese } = useI18n()
   const to = job.kind === 'blast' ? `/jobs/blast/${job.id}` : `/jobs/database/${job.id}`
   const isFailed = job.status === 'failed' || job.status === 'cancelled'
   const isRunning = job.status === 'running' || job.status === 'queued'
@@ -45,11 +49,11 @@ function JobRow({ job }: { job: Job }) {
         </strong>
         <div className="inline-actions">
           <Link className="secondary-button action-link" to={to}>
-            查看详情
+            {t('jobs.viewDetail')}
           </Link>
           {resultUrl ? (
             <a className="secondary-button action-link" href={resultUrl} rel="noreferrer" target="_blank">
-              打开结果接口
+              {t('jobs.openResultApi')}
             </a>
           ) : null}
           {stdoutUrl ? (
@@ -64,16 +68,16 @@ function JobRow({ job }: { job: Job }) {
           ) : null}
         </div>
       </div>
-      <span>状态：{job.status}</span>
-      <span>类型：{job.kind}</span>
-      {job.title ? <span>标题：{job.title}</span> : null}
-      {job.method ? <span>方法：{job.method}</span> : null}
-      {job.database_id ? <span>数据库 ID：{job.database_id}</span> : null}
-      {job.submitted_at ? <span>提交时间：{job.submitted_at}</span> : null}
-      {job.started_at ? <span>开始时间：{job.started_at}</span> : null}
-      {job.completed_at ? <span>完成时间：{job.completed_at}</span> : null}
-      {typeof job.exitstatus === 'number' ? <span>退出码：{job.exitstatus}</span> : null}
-      <code>{job.result_url || '结果未就绪'}</code>
+      <span>{isChinese ? '状态' : 'Status'}：{job.status}</span>
+      <span>{isChinese ? '类型' : 'Kind'}：{job.kind}</span>
+      {job.title ? <span>{isChinese ? '标题' : 'Title'}：{job.title}</span> : null}
+      {job.method ? <span>{isChinese ? '方法' : 'Method'}：{job.method}</span> : null}
+      {job.database_id ? <span>{isChinese ? '数据库 ID' : 'Database ID'}：{job.database_id}</span> : null}
+      {job.submitted_at ? <span>{isChinese ? '提交时间' : 'Submitted At'}：{job.submitted_at}</span> : null}
+      {job.started_at ? <span>{isChinese ? '开始时间' : 'Started At'}：{job.started_at}</span> : null}
+      {job.completed_at ? <span>{isChinese ? '完成时间' : 'Completed At'}：{job.completed_at}</span> : null}
+      {typeof job.exitstatus === 'number' ? <span>{isChinese ? '退出码' : 'Exit Code'}：{job.exitstatus}</span> : null}
+      <code>{job.result_url || (isChinese ? '结果未就绪' : 'Result not ready')}</code>
     </div>
   )
 }
@@ -96,6 +100,7 @@ function matchesKeyword(job: Job, keyword: string): boolean {
 }
 
 export function JobsPage() {
+  const { t, isChinese } = useI18n()
   const [tab, setTab] = useState<JobTab>('blast')
   const [status, setStatus] = useState<'' | JobStatus>('')
   const [keyword, setKeyword] = useState('')
@@ -118,13 +123,13 @@ export function JobsPage() {
       ])
       setBlastJobs(blast)
       setDatabaseJobs(database)
-      setLastLoadedAt(new Date().toLocaleString('zh-CN'))
+      setLastLoadedAt(new Date().toLocaleString(isChinese ? 'zh-CN' : 'en-US'))
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '加载任务失败')
+      setError(err instanceof Error ? err.message : (isChinese ? '加载任务失败' : 'Failed to load jobs'))
     } finally {
       setRefreshing(false)
     }
-  }, [limit, status])
+  }, [isChinese, limit, status])
 
   useEffect(() => {
     loadJobs()
@@ -172,18 +177,16 @@ export function JobsPage() {
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">任务中心</p>
-        <h2>任务工作台</h2>
-        <p className="page-copy">
-          这里用于集中查看 BLAST 与数据库索引任务，并继续向“任务运维台”演进。
-        </p>
+        <p className="eyebrow">{t('jobs.eyebrow')}</p>
+        <h2>{t('jobs.title')}</h2>
+        <p className="page-copy">{t('jobs.copy')}</p>
       </header>
 
       <div className="card-grid">
-        <StatCard label="任务总数" value={stats.total} />
-        <StatCard label="运行中" value={stats.running} />
-        <StatCard label="排队中" value={stats.queued} />
-        <StatCard label="失败任务" value={stats.failed} />
+        <StatCard label={t('jobs.total')} value={stats.total} />
+        <StatCard label={t('jobs.running')} value={stats.running} />
+        <StatCard label={t('jobs.queued')} value={stats.queued} />
+        <StatCard label={t('jobs.failed')} value={stats.failed} />
       </div>
 
       <article className="panel">
@@ -194,14 +197,14 @@ export function JobsPage() {
               onClick={() => setTab('blast')}
               type="button"
             >
-              BLAST 任务
+              {t('jobs.blastTab')}
             </button>
             <button
               className={tab === 'database_index' ? 'secondary-button active' : 'secondary-button'}
               onClick={() => setTab('database_index')}
               type="button"
             >
-              数据库索引任务
+              {t('jobs.databaseTab')}
             </button>
           </div>
 
@@ -212,10 +215,10 @@ export function JobsPage() {
                 onChange={(event) => setAutoRefresh(event.target.checked)}
                 type="checkbox"
               />
-              <span>自动刷新</span>
+              <span>{t('jobs.autoRefresh')}</span>
             </label>
             <select value={status} onChange={(event) => setStatus(event.target.value as '' | JobStatus)}>
-              {statusOptions.map((option) => (
+              {statusOptions(isChinese).map((option) => (
                 <option key={option.label} value={option.value}>
                   {option.label}
                 </option>
@@ -224,29 +227,29 @@ export function JobsPage() {
             <select value={limit} onChange={(event) => setLimit(Number(event.target.value))}>
               {limitOptions.map((option) => (
                 <option key={option} value={option}>
-                  最近 {option} 条
+                  {isChinese ? `最近 ${option} 条` : `Last ${option}`}
                 </option>
               ))}
             </select>
             <button className="primary-button" disabled={refreshing} onClick={loadJobs} type="button">
-              {refreshing ? '刷新中...' : '刷新'}
+              {refreshing ? t('jobs.refreshing') : t('jobs.refresh')}
             </button>
           </div>
         </div>
 
         <label className="filter-field">
-          <span>关键词检索</span>
+          <span>{t('jobs.keyword')}</span>
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="按任务 ID、标题、方法、数据库 ID、数据库标题筛选"
+            placeholder={t('jobs.keywordPlaceholder')}
           />
         </label>
 
         <p className="toolbar-note">
-          最近刷新时间：{lastLoadedAt || '尚未完成首次加载'}
-          {autoRefresh ? '，每 5 秒自动同步一次。' : '，当前为手动刷新模式。'}
-          {` 当前列表显示 ${formatCount(currentJobs.length)} 条任务。`}
+          {isChinese
+            ? `最近刷新时间：${lastLoadedAt || '尚未完成首次加载'}${autoRefresh ? '，每 5 秒自动同步一次。' : '，当前为手动刷新模式。'} 当前列表显示 ${formatCount(currentJobs.length)} 条任务。`
+            : `Last refreshed: ${lastLoadedAt || 'not loaded yet'}${autoRefresh ? ', auto refresh every 5 seconds.' : ', manual refresh mode.'} Showing ${formatCount(currentJobs.length)} jobs.`}
         </p>
 
         {error ? <p className="error-text">{error}</p> : null}
@@ -255,28 +258,28 @@ export function JobsPage() {
           {currentJobs.map((job) => (
             <JobRow key={job.id} job={job} />
           ))}
-          {!currentJobs.length && !error ? <p>当前筛选条件下没有任务。</p> : null}
+          {!currentJobs.length && !error ? <p>{t('jobs.none')}</p> : null}
         </div>
       </article>
 
       <article className="panel">
-        <h3>最近失败 / 已取消任务</h3>
+        <h3>{t('jobs.failedSection')}</h3>
         <div className="list">
           {failedJobs.map((job) => (
             <JobRow key={`failed-${job.id}`} job={job} />
           ))}
-          {!failedJobs.length ? <p>当前没有失败或已取消的任务。</p> : null}
+          {!failedJobs.length ? <p>{t('jobs.noneFailed')}</p> : null}
         </div>
       </article>
 
       <article className="panel">
-        <h3>最近活跃任务</h3>
-        <p className="toolbar-note">这里优先显示排队中和运行中的任务，便于值守时快速观察。</p>
+        <h3>{t('jobs.activeSection')}</h3>
+        <p className="toolbar-note">{t('jobs.activeHelper')}</p>
         <div className="list">
           {activeJobs.map((job) => (
             <JobRow key={`active-${job.id}`} job={job} />
           ))}
-          {!activeJobs.length ? <p>当前没有排队中或运行中的任务。</p> : null}
+          {!activeJobs.length ? <p>{t('jobs.noneActive')}</p> : null}
         </div>
       </article>
     </section>

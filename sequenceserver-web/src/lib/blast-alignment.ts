@@ -1,6 +1,7 @@
 import type { BlastHspPreview } from './job-results'
 
 export type BlastAlgorithm = 'blastn' | 'blastp' | 'blastx' | 'tblastn' | 'tblastx' | string
+type AlignmentLocale = 'zh-CN' | 'en'
 
 function formatDecimal(value?: number): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
@@ -111,11 +112,16 @@ export function formatPairwiseAlignment(
   hsp: BlastHspPreview,
   algorithm: BlastAlgorithm,
   lineWidth = 90,
+  locale: AlignmentLocale = 'zh-CN',
 ): string {
   const qseq = hsp.qseq || ''
   const sseq = hsp.sseq || ''
   const midline = hsp.midline || ''
-  if (!qseq || !sseq || !midline) return '当前 HSP 不包含可渲染的序列对齐信息。'
+  if (!qseq || !sseq || !midline) {
+    return locale === 'zh-CN'
+      ? '当前 HSP 不包含可渲染的序列对齐信息。'
+      : 'The current HSP does not include renderable pairwise alignment content.'
+  }
 
   const safeLineWidth = Math.max(1, Math.floor(lineWidth))
   const coordWidth = Math.max(
@@ -163,8 +169,11 @@ export function buildAlignmentExport(
   hsps: BlastHspPreview[],
   algorithm: BlastAlgorithm,
   lineWidth = 90,
+  locale: AlignmentLocale = 'zh-CN',
 ): string {
-  if (!hsps.length) return `${queryId} vs ${hitId}\n\n无可导出的 HSP。`
+  if (!hsps.length) {
+    return `${queryId} vs ${hitId}\n\n${locale === 'zh-CN' ? '无可导出的 HSP。' : 'No exportable HSP is available.'}`
+  }
 
   return hsps
     .map((hsp, index) => {
@@ -175,7 +184,7 @@ export function buildAlignmentExport(
         `# ${buildHspStats(hsp, algorithm).join(', ')}`,
       ].join('\n')
 
-      return `${header}\n${formatPairwiseAlignment(hsp, algorithm, lineWidth)}`
+      return `${header}\n${formatPairwiseAlignment(hsp, algorithm, lineWidth, locale)}`
     })
     .join('\n\n')
 }

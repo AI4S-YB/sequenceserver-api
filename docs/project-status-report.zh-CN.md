@@ -197,6 +197,8 @@
 - [docs/frontend-nginx-example.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-nginx-example.zh-CN.md)
 - [docs/frontend-docker-compose.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-docker-compose.zh-CN.md)
 - [docs/frontend-release-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-release-checklist.zh-CN.md)
+- [docs/frontend-live-smoke-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-live-smoke-report.zh-CN.md)
+- [docs/frontend-manual-acceptance-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-manual-acceptance-checklist.zh-CN.md)
 
 同时已补充部署模板：
 

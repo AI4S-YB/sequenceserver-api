@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CollapsibleSection } from '../components/collapsible-section'
 import { Link, useParams } from 'react-router-dom'
-import { ApiClientError, cancelDatabaseJob, fetchDatabaseJob, fetchDatabaseJobLog, fetchDatabaseJobResult } from '../lib/api'
+import { ApiClientError, buildApiUrl, cancelDatabaseJob, fetchDatabaseJob, fetchDatabaseJobLog, fetchDatabaseJobResult } from '../lib/api'
+import { useI18n } from '../lib/i18n'
 import { formatCount, summarizeDatabaseResult } from '../lib/job-results'
 import type { Job, JobLog } from '../types/api'
 
@@ -14,18 +16,19 @@ function usePolling(enabled: boolean, callback: () => void) {
   }, [enabled, callback])
 }
 
-function summarizeLog(log?: JobLog | null): string {
-  if (!log?.content) return '暂无日志摘要。'
+function summarizeLog(log?: JobLog | null, isChinese = true): string {
+  if (!log?.content) return isChinese ? '暂无日志摘要。' : 'No log summary.'
 
   const lines = log.content
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
 
-  return lines.slice(-3).join(' | ') || '暂无日志摘要。'
+  return lines.slice(-3).join(' | ') || (isChinese ? '暂无日志摘要。' : 'No log summary.')
 }
 
 export function DatabaseJobDetailPage() {
+  const { t, isChinese } = useI18n()
   const { id = '' } = useParams()
   const [job, setJob] = useState<Job | null>(null)
   const [stdoutLog, setStdoutLog] = useState<JobLog | null>(null)
@@ -41,6 +44,9 @@ export function DatabaseJobDetailPage() {
     [autoRefresh, job?.status],
   )
   const summary = useMemo(() => summarizeDatabaseResult(result), [result])
+  const resultApiUrl = useMemo(() => (job?.result_url ? buildApiUrl(job.result_url) : ''), [job?.result_url])
+  const stdoutApiUrl = useMemo(() => (job?.log_urls?.stdout ? buildApiUrl(job.log_urls.stdout) : ''), [job?.log_urls?.stdout])
+  const stderrApiUrl = useMemo(() => (job?.log_urls?.stderr ? buildApiUrl(job.log_urls.stderr) : ''), [job?.log_urls?.stderr])
 
   const loadLogs = useCallback(async () => {
     const [stdout, stderr] = await Promise.all([
@@ -64,13 +70,13 @@ export function DatabaseJobDetailPage() {
       } else {
         setResult(null)
       }
-      setLastLoadedAt(new Date().toLocaleString('zh-CN'))
+      setLastLoadedAt(new Date().toLocaleString(isChinese ? 'zh-CN' : 'en-US'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载任务详情失败')
+      setError(err instanceof Error ? err.message : isChinese ? '加载任务详情失败' : 'Failed to load job details')
     } finally {
       setRefreshing(false)
     }
-  }, [id, loadLogs])
+  }, [id, isChinese, loadLogs])
 
   usePolling(Boolean(id) && pollingEnabled, loadJob)
 
@@ -84,7 +90,7 @@ export function DatabaseJobDetailPage() {
       setJob(cancelled)
       await loadLogs()
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : '取消任务失败')
+      setError(err instanceof ApiClientError ? err.message : isChinese ? '取消任务失败' : 'Failed to cancel job')
     }
   }
 
@@ -96,14 +102,14 @@ export function DatabaseJobDetailPage() {
         : 'status-panel'
 
   const statusMessage = useMemo(() => {
-    if (!job) return '正在加载任务信息。'
-    if (job.status === 'queued') return '索引任务已进入队列，页面会按设置自动刷新。'
-    if (job.status === 'running') return '索引任务正在运行，可通过日志观察 makeblastdb 执行进度。'
-    if (job.status === 'succeeded') return '索引任务已成功完成，数据库元数据已可查看。'
-    if (job.status === 'cancelled') return `索引任务已取消。${summarizeLog(stderrLog)}`
-    if (job.status === 'failed') return `索引任务执行失败。${summarizeLog(stderrLog)}`
-    return '任务状态未知。'
-  }, [job, stderrLog])
+    if (!job) return isChinese ? '正在加载任务信息。' : 'Loading job details.'
+    if (job.status === 'queued') return isChinese ? '索引任务已进入队列，页面会按设置自动刷新。' : 'The indexing job is queued and will refresh automatically.'
+    if (job.status === 'running') return isChinese ? '索引任务正在运行，可通过日志观察 makeblastdb 执行进度。' : 'The indexing job is running. Check the logs for makeblastdb progress.'
+    if (job.status === 'succeeded') return isChinese ? '索引任务已成功完成，数据库元数据已可查看。' : 'The indexing job completed successfully and database metadata is available.'
+    if (job.status === 'cancelled') return isChinese ? `索引任务已取消。${summarizeLog(stderrLog, true)}` : `The indexing job was cancelled. ${summarizeLog(stderrLog, false)}`
+    if (job.status === 'failed') return isChinese ? `索引任务执行失败。${summarizeLog(stderrLog, true)}` : `The indexing job failed. ${summarizeLog(stderrLog, false)}`
+    return isChinese ? '任务状态未知。' : 'Unknown job status.'
+  }, [isChinese, job, stderrLog])
 
   const failureHints = useMemo(() => {
     if (!job || (job.status !== 'failed' && job.status !== 'cancelled')) return []
@@ -114,51 +120,51 @@ export function DatabaseJobDetailPage() {
     const hints: string[] = []
 
     if (combined.includes('permission denied')) {
-      hints.push('检测到权限不足，优先检查数据库目录和输出目录的写权限。')
+      hints.push(isChinese ? '检测到权限不足，优先检查数据库目录和输出目录的写权限。' : 'Permission issues detected. Check write access to the database and output directories.')
     }
     if (combined.includes('no space left') || combined.includes('not enough disk space')) {
-      hints.push('检测到磁盘空间不足，需要先清理目标磁盘后再重试。')
+      hints.push(isChinese ? '检测到磁盘空间不足，需要先清理目标磁盘后再重试。' : 'Disk space appears insufficient. Free space and retry.')
     }
     if (combined.includes('taxid') || combined.includes('taxonomy')) {
-      hints.push('日志里出现 taxid/taxonomy 相关信息，建议核对 taxid 参数和本地 taxonomy 数据。')
+      hints.push(isChinese ? '日志里出现 taxid/taxonomy 相关信息，建议核对 taxid 参数和本地 taxonomy 数据。' : 'Taxid or taxonomy-related messages were detected. Check the taxid parameter and local taxonomy data.')
     }
     if (combined.includes('invalid') && combined.includes('fasta')) {
-      hints.push('日志里出现 FASTA 格式异常，建议检查序列头和文件编码。')
+      hints.push(isChinese ? '日志里出现 FASTA 格式异常，建议检查序列头和文件编码。' : 'Potential FASTA formatting issues were detected. Check headers and file encoding.')
     }
     if (job.status === 'cancelled') {
-      hints.push('该任务是人工取消，不一定代表数据库文件本身有问题。')
+      hints.push(isChinese ? '该任务是人工取消，不一定代表数据库文件本身有问题。' : 'The job was cancelled manually and the database file itself may still be fine.')
     }
 
     return hints
-  }, [job, stderrLog?.content, stdoutLog?.content])
+  }, [isChinese, job, stderrLog?.content, stdoutLog?.content])
 
   const nextActions = useMemo(() => {
     if (!job) return []
 
     if (job.status === 'succeeded') {
       return [
-        { label: '返回数据库管理', to: '/databases', helper: '查看新索引数据库是否已出现在列表中。' },
-        { label: '去提交 BLAST', to: '/blast/new', helper: '基于新数据库直接发起一次检索。' },
-        { label: '返回任务中心', to: '/jobs', helper: '继续查看其他任务状态。' },
+        { label: isChinese ? '返回数据库管理' : 'Back to Databases', to: '/databases', helper: isChinese ? '查看新索引数据库是否已出现在列表中。' : 'Check whether the newly indexed database is now listed.' },
+        { label: isChinese ? '去提交 BLAST' : 'Run BLAST', to: '/blast/new', helper: isChinese ? '基于新数据库直接发起一次检索。' : 'Start a search directly with the new database.' },
+        { label: isChinese ? '返回任务中心' : 'Back to Jobs', to: '/jobs', helper: isChinese ? '继续查看其他任务状态。' : 'Continue reviewing other job states.' },
       ]
     }
 
     if (job.status === 'failed' || job.status === 'cancelled') {
       return [
-        { label: '返回数据库管理', to: '/databases', helper: '检查原始 FASTA、路径和导入方式。' },
-        { label: '返回任务中心', to: '/jobs', helper: '切回任务列表继续排查其他任务。' },
+        { label: isChinese ? '返回数据库页面' : 'Back to Databases', to: '/databases', helper: isChinese ? '检查原始 FASTA、路径和导入方式。' : 'Check the original FASTA, path, and import method.' },
+        { label: isChinese ? '返回任务中心' : 'Back to Jobs', to: '/jobs', helper: isChinese ? '切回任务列表继续排查其他任务。' : 'Go back to the job list and continue troubleshooting.' },
       ]
     }
 
-    return [{ label: '返回任务中心', to: '/jobs', helper: '查看队列里的其他任务。' }]
-  }, [job])
+    return [{ label: isChinese ? '返回任务中心' : 'Back to Jobs', to: '/jobs', helper: isChinese ? '查看队列里的其他任务。' : 'Inspect other jobs in the queue.' }]
+  }, [isChinese, job])
 
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">数据库索引任务详情</p>
+        <p className="eyebrow">{t('databaseDetail.eyebrow')}</p>
         <h2>{id}</h2>
-        <p className="page-copy">这一页对应单个数据库索引任务的状态、日志、取消与结果查看。</p>
+        <p className="page-copy">{t('databaseDetail.copy')}</p>
       </header>
 
       {error ? <p className="error-text">{error}</p> : null}
@@ -166,86 +172,105 @@ export function DatabaseJobDetailPage() {
       <article className={statusTone}>
         <div className="toolbar">
           <div className="toolbar-group">
-            <strong>状态提示</strong>
+            <strong>{t('databaseDetail.statusHint')}</strong>
             <span>{statusMessage}</span>
           </div>
           <div className="toolbar-group">
+            {resultApiUrl ? (
+              <a className="secondary-button action-link" href={resultApiUrl} rel="noreferrer" target="_blank">
+                {isChinese ? '结果 API' : 'Result API'}
+              </a>
+            ) : null}
             <label className="inline-toggle">
               <input
                 checked={autoRefresh}
                 onChange={(event) => setAutoRefresh(event.target.checked)}
                 type="checkbox"
               />
-              <span>自动刷新</span>
+              <span>{t('jobs.autoRefresh')}</span>
             </label>
             <button className="secondary-button" disabled={refreshing} onClick={loadJob} type="button">
-              {refreshing ? '刷新中...' : '立即刷新'}
+              {refreshing ? t('jobs.refreshing') : t('databaseDetail.refreshNow')}
             </button>
           </div>
         </div>
         <p className="toolbar-note">
-          最近刷新时间：{lastLoadedAt || '尚未完成首次加载'}
-          {autoRefresh ? '，运行中任务会每 3 秒自动刷新。' : '，当前为手动刷新模式。'}
+          {isChinese
+            ? `最近刷新时间：${lastLoadedAt || '尚未完成首次加载'}${autoRefresh ? '，运行中任务会每 3 秒自动刷新。' : '，当前为手动刷新模式。'}`
+            : `Last refreshed: ${lastLoadedAt || 'not loaded yet'}${autoRefresh ? ', running jobs refresh every 3 seconds.' : ', manual refresh mode.'}`}
         </p>
       </article>
 
       <div className="two-column">
         <article className="panel">
-          <h3>任务状态</h3>
+          <h3>{t('databaseDetail.taskStatus')}</h3>
           {job ? (
             <div className="detail-grid">
-              <span>状态：{job.status}</span>
-              <span>数据库 ID：{job.database_id || '-'}</span>
-              <span>标题：{job.title || '-'}</span>
-              <span>提交时间：{job.submitted_at}</span>
-              <span>开始时间：{job.started_at || '-'}</span>
-              <span>完成时间：{job.completed_at || '-'}</span>
-              <span>退出码：{typeof job.exitstatus === 'number' ? job.exitstatus : '-'}</span>
+              <span>{isChinese ? '状态' : 'Status'}：{job.status}</span>
+              <span>{isChinese ? '数据库 ID' : 'Database ID'}：{job.database_id || '-'}</span>
+              <span>{isChinese ? '标题' : 'Title'}：{job.title || '-'}</span>
+              <span>{isChinese ? '提交时间' : 'Submitted At'}：{job.submitted_at}</span>
+              <span>{isChinese ? '开始时间' : 'Started At'}：{job.started_at || '-'}</span>
+              <span>{isChinese ? '完成时间' : 'Completed At'}：{job.completed_at || '-'}</span>
+              <span>{isChinese ? '退出码' : 'Exit Code'}：{typeof job.exitstatus === 'number' ? job.exitstatus : '-'}</span>
+              {stdoutApiUrl ? (
+                <a className="secondary-button action-link" href={stdoutApiUrl} rel="noreferrer" target="_blank">
+                  {isChinese ? '打开 stdout API' : 'Open stdout API'}
+                </a>
+              ) : null}
+              {stderrApiUrl ? (
+                <a className="secondary-button action-link" href={stderrApiUrl} rel="noreferrer" target="_blank">
+                  {isChinese ? '打开 stderr API' : 'Open stderr API'}
+                </a>
+              ) : null}
               {(job.status === 'queued' || job.status === 'running') ? (
                 <button className="primary-button" type="button" onClick={handleCancel}>
-                  取消任务
+                  {t('databaseDetail.cancel')}
                 </button>
               ) : null}
             </div>
           ) : (
-            <p>加载中...</p>
+            <p>{isChinese ? '加载中...' : 'Loading...'}</p>
           )}
         </article>
 
         <article className="panel">
-          <h3>结果概览</h3>
+          <h3>{t('databaseDetail.resultSummary')}</h3>
           {summary ? (
             <div className="result-stack">
               <div className="result-summary-grid">
                 <div className="result-stat">
-                  <span className="result-stat-label">索引状态</span>
-                  <strong>{summary.indexed ? '已完成' : '未完成'}</strong>
+                  <span className="result-stat-label">{isChinese ? '索引状态' : 'Index Status'}</span>
+                  <strong>{summary.indexed ? (isChinese ? '已完成' : 'Completed') : (isChinese ? '未完成' : 'Incomplete')}</strong>
                 </div>
                 <div className="result-stat">
-                  <span className="result-stat-label">序列数</span>
+                  <span className="result-stat-label">{isChinese ? '序列数' : 'Sequences'}</span>
                   <strong>{formatCount(summary.nsequences)}</strong>
                 </div>
                 <div className="result-stat">
-                  <span className="result-stat-label">字符数</span>
+                  <span className="result-stat-label">{isChinese ? '字符数' : 'Characters'}</span>
                   <strong>{formatCount(summary.ncharacters)}</strong>
                 </div>
                 <div className="result-stat">
-                  <span className="result-stat-label">数据库类型</span>
+                  <span className="result-stat-label">{isChinese ? '数据库类型' : 'Database Type'}</span>
                   <strong>{summary.type || '-'}</strong>
                 </div>
               </div>
 
               <div className="detail-grid">
-                <span>数据库 ID：{summary.id || job?.database_id || '-'}</span>
-                <span>名称：{summary.name || '-'}</span>
-                <span>标题：{summary.title || job?.title || '-'}</span>
-                <span>更新时间：{summary.updatedOn || '-'}</span>
-                <span>格式版本：{summary.format || '-'}</span>
-                <span>分类：{summary.categories.length ? summary.categories.join('，') : '-'}</span>
+                <span>{isChinese ? '数据库 ID' : 'Database ID'}：{summary.id || job?.database_id || '-'}</span>
+                <span>{isChinese ? '名称' : 'Name'}：{summary.name || '-'}</span>
+                <span>{isChinese ? '标题' : 'Title'}：{summary.title || job?.title || '-'}</span>
+                <span>{isChinese ? '更新时间' : 'Updated At'}：{summary.updatedOn || '-'}</span>
+                <span>{isChinese ? '格式版本' : 'Format'}：{summary.format || '-'}</span>
+                <span>{isChinese ? '分类' : 'Categories'}：{summary.categories.length ? summary.categories.join(isChinese ? '，' : ', ') : '-'}</span>
               </div>
 
-              <div className="result-box">
-                <h4>后续操作</h4>
+              <CollapsibleSection
+                defaultCollapsed={false}
+                storageKey={`database:${id}:next-actions`}
+                title={isChinese ? '后续操作' : 'Next Actions'}
+              >
                 <div className="list">
                   {nextActions.map((action) => (
                     <div className="list-item" key={action.to}>
@@ -256,20 +281,27 @@ export function DatabaseJobDetailPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </CollapsibleSection>
 
-              <details className="raw-result">
-                <summary>查看原始结果 JSON</summary>
+              <CollapsibleSection
+                className="result-box"
+                defaultCollapsed={true}
+                storageKey={`database:${id}:raw-json`}
+                title={isChinese ? '原始结果 JSON' : 'Raw Result JSON'}
+              >
                 <pre className="log-box">{JSON.stringify(result, null, 2)}</pre>
-              </details>
+              </CollapsibleSection>
             </div>
           ) : (
             <div className="result-stack">
-              <p>任务未完成或结果尚未加载。</p>
+              <p>{isChinese ? '任务未完成或结果尚未加载。' : 'The job is not finished or the result has not been loaded yet.'}</p>
               {job?.result_url ? <code>{job.result_url}</code> : null}
               {(job?.status === 'failed' || job?.status === 'cancelled') && failureHints.length ? (
-                <div className="result-box">
-                  <h4>失败诊断建议</h4>
+                <CollapsibleSection
+                  defaultCollapsed={false}
+                  storageKey={`database:${id}:failure-hints`}
+                  title={isChinese ? '失败诊断建议' : 'Failure Hints'}
+                >
                   <div className="list">
                     {failureHints.map((hint) => (
                       <div className="list-item list-item-warning" key={hint}>
@@ -277,10 +309,13 @@ export function DatabaseJobDetailPage() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </CollapsibleSection>
               ) : null}
-              <div className="result-box">
-                <h4>后续操作</h4>
+              <CollapsibleSection
+                defaultCollapsed={false}
+                storageKey={`database:${id}:pending-next-actions`}
+                title={isChinese ? '后续操作' : 'Next Actions'}
+              >
                 <div className="list">
                   {nextActions.map((action) => (
                     <div className="list-item" key={action.to}>
@@ -291,7 +326,7 @@ export function DatabaseJobDetailPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </CollapsibleSection>
             </div>
           )}
         </article>
@@ -299,14 +334,40 @@ export function DatabaseJobDetailPage() {
 
       <div className="two-column">
         <article className="panel">
-          <h3>stdout</h3>
-          <p className="toolbar-note">摘要：{summarizeLog(stdoutLog)}</p>
-          <pre className="log-box">{stdoutLog?.content || '暂无输出'}</pre>
+          <CollapsibleSection
+            className=""
+            defaultCollapsed={true}
+            storageKey={`database:${id}:stdout`}
+            title={isChinese ? 'stdout 日志' : 'stdout Log'}
+            actions={
+              stdoutApiUrl ? (
+                <a className="secondary-button action-link" href={stdoutApiUrl} rel="noreferrer" target="_blank">
+                  {isChinese ? '打开 API' : 'Open API'}
+                </a>
+              ) : undefined
+            }
+          >
+            <p className="toolbar-note">{isChinese ? '摘要' : 'Summary'}：{summarizeLog(stdoutLog, isChinese)}</p>
+            <pre className="log-box">{stdoutLog?.content || (isChinese ? '暂无输出' : 'No output')}</pre>
+          </CollapsibleSection>
         </article>
         <article className="panel">
-          <h3>stderr</h3>
-          <p className="toolbar-note">摘要：{summarizeLog(stderrLog)}</p>
-          <pre className="log-box">{stderrLog?.content || '暂无输出'}</pre>
+          <CollapsibleSection
+            className=""
+            defaultCollapsed={true}
+            storageKey={`database:${id}:stderr`}
+            title={isChinese ? 'stderr 日志' : 'stderr Log'}
+            actions={
+              stderrApiUrl ? (
+                <a className="secondary-button action-link" href={stderrApiUrl} rel="noreferrer" target="_blank">
+                  {isChinese ? '打开 API' : 'Open API'}
+                </a>
+              ) : undefined
+            }
+          >
+            <p className="toolbar-note">{isChinese ? '摘要' : 'Summary'}：{summarizeLog(stderrLog, isChinese)}</p>
+            <pre className="log-box">{stderrLog?.content || (isChinese ? '暂无输出' : 'No output')}</pre>
+          </CollapsibleSection>
         </article>
       </div>
     </section>

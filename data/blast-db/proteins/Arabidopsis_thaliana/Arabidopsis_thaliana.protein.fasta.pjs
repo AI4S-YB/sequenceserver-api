@@ -1,0 +1,24 @@
+{
+  "version": "1.2",
+  "dbname": "Arabidopsis_thaliana.protein.fasta",
+  "dbtype": "Protein",
+  "db-version": 5,
+  "description": "Arabidopsis thaliana protein",
+  "number-of-letters": 20907797,
+  "number-of-sequences": 48455,
+  "last-updated": "2026-04-15T00:05:00",
+  "number-of-volumes": 1,
+  "bytes-total": 27246487,
+  "bytes-to-cache": 21344029,
+  "files": [
+    "Arabidopsis_thaliana.protein.fasta.pdb",
+    "Arabidopsis_thaliana.protein.fasta.phr",
+    "Arabidopsis_thaliana.protein.fasta.pin",
+    "Arabidopsis_thaliana.protein.fasta.pog",
+    "Arabidopsis_thaliana.protein.fasta.pos",
+    "Arabidopsis_thaliana.protein.fasta.pot",
+    "Arabidopsis_thaliana.protein.fasta.psq",
+    "Arabidopsis_thaliana.protein.fasta.ptf",
+    "Arabidopsis_thaliana.protein.fasta.pto"
+  ]
+}

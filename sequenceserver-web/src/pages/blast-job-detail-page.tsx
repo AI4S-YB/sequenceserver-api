@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { buildAlignmentExport, type BlastAlgorithm } from '../lib/blast-alignment'
 import { BlastAlignmentViewer } from '../components/blast-alignment-viewer'
+import { BlastQueryOverview } from '../components/blast-query-overview'
+import { CollapsibleSection } from '../components/collapsible-section'
 import { BlastVisualOverview } from '../components/blast-visual-overview'
 import {
   ApiClientError,
@@ -13,13 +16,15 @@ import {
   fetchSequences,
   submitSequenceDownload,
 } from '../lib/api'
+import { appConfig } from '../lib/config'
+import { useI18n } from '../lib/i18n'
 import { formatCount, summarizeBlastResult } from '../lib/job-results'
+import { resolveHitActions } from '../lib/hit-actions'
 import { buildQueryHash, parseQueryHash } from '../lib/query-navigation'
 import { isBlastResultWarning } from '../lib/result-warning'
 import { buildBlastResultMailto, copyText } from '../lib/share'
 import type { BlastResultWarning, Job, JobLog, SequenceEntry } from '../types/api'
 
-const QUERY_PAGE_SIZE = 8
 const HIT_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 const QUERY_DETAIL_SECTION_ID = 'query-detail-panel'
 
@@ -33,15 +38,15 @@ function usePolling(enabled: boolean, callback: () => void) {
   }, [enabled, callback])
 }
 
-function summarizeLog(log?: JobLog | null): string {
-  if (!log?.content) return '暂无日志摘要。'
+function summarizeLog(log?: JobLog | null, isChinese = true): string {
+  if (!log?.content) return isChinese ? '暂无日志摘要。' : 'No log summary.'
 
   const lines = log.content
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
 
-  return lines.slice(-3).join(' | ') || '暂无日志摘要。'
+  return lines.slice(-3).join(' | ') || (isChinese ? '暂无日志摘要。' : 'No log summary.')
 }
 
 function formatSequenceAsFasta(sequence: SequenceEntry): string {
@@ -51,7 +56,50 @@ function formatSequenceAsFasta(sequence: SequenceEntry): string {
   return [defline, ...body].join('\n')
 }
 
+function downloadTextFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function sanitizeFilename(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '_')
+}
+
+function hitCardId(queryId: string, hitId: string): string {
+  return `hit-card-${sanitizeFilename(queryId)}-${sanitizeFilename(hitId)}`
+}
+
+function formatEvalueDisplay(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  if (value === 0) return '0'
+  if (value >= 0.01 && value < 1000) return Number.isInteger(value) ? String(value) : value.toFixed(2)
+  return value.toExponential(2)
+}
+
+function formatIdentityPercent(identity?: number, length?: number): string {
+  if (typeof identity !== 'number' || typeof length !== 'number' || length <= 0) return '-'
+  return `${((identity / length) * 100).toFixed(1)}%`
+}
+
+function findSummaryValue(
+  items: Array<{ key: string; value: string }> | undefined,
+  expectedKeys: string[],
+): string | undefined {
+  if (!items?.length) return undefined
+
+  const lowered = expectedKeys.map((item) => item.toLowerCase())
+  return items.find((item) => lowered.includes(item.key.toLowerCase()))?.value
+}
+
 export function BlastJobDetailPage() {
+  const { t, isChinese, locale } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
   const { id = '' } = useParams()
@@ -66,7 +114,6 @@ export function BlastJobDetailPage() {
   const [lastLoadedAt, setLastLoadedAt] = useState('')
   const [queryFilter, setQueryFilter] = useState('')
   const [selectedQueryId, setSelectedQueryId] = useState('')
-  const [queryPage, setQueryPage] = useState(1)
   const [hitPage, setHitPage] = useState(1)
   const [hitPageSize, setHitPageSize] = useState<number>(10)
   const [selectedHitIds, setSelectedHitIds] = useState<string[]>([])
@@ -103,14 +150,6 @@ export function BlastJobDetailPage() {
       filteredQueries[0]
     )
   }, [filteredQueries, selectedQueryId])
-  const totalQueryPages = useMemo(
-    () => Math.max(1, Math.ceil(filteredQueries.length / QUERY_PAGE_SIZE)),
-    [filteredQueries.length],
-  )
-  const visibleQueries = useMemo(() => {
-    const startIndex = (queryPage - 1) * QUERY_PAGE_SIZE
-    return filteredQueries.slice(startIndex, startIndex + QUERY_PAGE_SIZE)
-  }, [filteredQueries, queryPage])
   const selectedQueryIndex = useMemo(
     () => filteredQueries.findIndex((query) => query.id === selectedQuery?.id),
     [filteredQueries, selectedQuery?.id],
@@ -136,16 +175,6 @@ export function BlastJobDetailPage() {
     setPreviewError('')
     setHitPage(1)
   }, [selectedQuery?.id])
-
-  useEffect(() => {
-    setQueryPage(1)
-  }, [queryFilter])
-
-  useEffect(() => {
-    if (queryPage > totalQueryPages) {
-      setQueryPage(totalQueryPages)
-    }
-  }, [queryPage, totalQueryPages])
 
   useEffect(() => {
     setHitPage(1)
@@ -187,15 +216,6 @@ export function BlastJobDetailPage() {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
-  useEffect(() => {
-    if (selectedQueryIndex < 0) return
-
-    const page = Math.floor(selectedQueryIndex / QUERY_PAGE_SIZE) + 1
-    if (queryPage !== page) {
-      setQueryPage(page)
-    }
-  }, [queryPage, selectedQueryIndex])
-
   const loadLogs = useCallback(async () => {
     const [stdout, stderr] = await Promise.all([
       fetchBlastJobLog(id, 'stdout').catch(() => null),
@@ -225,13 +245,13 @@ export function BlastJobDetailPage() {
         setResult(null)
         setResultWarning(null)
       }
-      setLastLoadedAt(new Date().toLocaleString('zh-CN'))
+      setLastLoadedAt(new Date().toLocaleString(isChinese ? 'zh-CN' : 'en-US'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载任务详情失败')
+      setError(err instanceof Error ? err.message : isChinese ? '加载任务详情失败' : 'Failed to load job details')
     } finally {
       setRefreshing(false)
     }
-  }, [bypassLargeResultWarning, id, loadLogs])
+  }, [bypassLargeResultWarning, id, isChinese, loadLogs])
 
   usePolling(Boolean(id) && pollingEnabled, loadJob)
 
@@ -245,7 +265,7 @@ export function BlastJobDetailPage() {
       setJob(cancelled)
       await loadLogs()
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : '取消任务失败')
+      setError(err instanceof ApiClientError ? err.message : isChinese ? '取消任务失败' : 'Failed to cancel job')
     }
   }
 
@@ -279,8 +299,6 @@ export function BlastJobDetailPage() {
     if (!target) return
 
     setSelectedQueryId(queryId)
-    const page = Math.floor(filteredQueries.indexOf(target) / QUERY_PAGE_SIZE) + 1
-    setQueryPage(page)
 
     const url = buildQueryHash(queryId)
     if (options?.replaceHash) {
@@ -303,7 +321,7 @@ export function BlastJobDetailPage() {
 
   async function handlePreviewSequence(hitId: string) {
     if (!databaseIds.length) {
-      setPreviewError('当前任务没有可用数据库标识，无法提取序列。')
+      setPreviewError(isChinese ? '当前任务没有可用数据库标识，无法提取序列。' : 'No database identifiers are available for sequence lookup.')
       return
     }
 
@@ -316,10 +334,10 @@ export function BlastJobDetailPage() {
       })
       setPreviewSequence(payload.sequences[0] || null)
       if (!payload.sequences.length) {
-        setPreviewError('未找到对应序列。')
+        setPreviewError(isChinese ? '未找到对应序列。' : 'Sequence not found.')
       }
     } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : '加载命中序列失败')
+      setPreviewError(err instanceof Error ? err.message : isChinese ? '加载命中序列失败' : 'Failed to load matched sequence')
       setPreviewSequence(null)
     } finally {
       setPreviewLoading(false)
@@ -344,6 +362,38 @@ export function BlastJobDetailPage() {
     })
   }
 
+  function handleDownloadSelectedHitsAlignment() {
+    if (!selectedQuery || !selectedHitIds.length) return
+
+    const selectedHits = selectedQuery.hits.filter((hit) => selectedHitIds.includes(hit.id))
+    if (!selectedHits.length) return
+
+    const content = selectedHits
+      .map((hit) => buildAlignmentExport(selectedQuery.id, hit.id, hit.hsps, queryAlgorithm, 90, locale))
+      .join('\n\n')
+
+    downloadTextFile(content, `${sanitizeFilename(selectedQuery.id)}__selected_hits_alignment.txt`)
+  }
+
+  function focusHitCard(targetHitId: string) {
+    if (!selectedQuery) return
+
+    const hitIndex = selectedQuery.hits.findIndex((hit) => hit.id === targetHitId)
+    if (hitIndex < 0) return
+
+    const nextPage = Math.floor(hitIndex / hitPageSize) + 1
+    if (nextPage !== hitPage) {
+      setHitPage(nextPage)
+    }
+
+    window.setTimeout(() => {
+      document.getElementById(hitCardId(selectedQuery.id, targetHitId))?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }, 40)
+  }
+
   const selectedHitDownloadUrl = useMemo(() => {
     if (!selectedHitIds.length || !databaseIds.length) return ''
 
@@ -352,6 +402,35 @@ export function BlastJobDetailPage() {
       databaseIds,
     })
   }, [databaseIds, selectedHitIds])
+  const resultApiUrl = useMemo(() => (job?.result_url ? buildApiUrl(job.result_url) : ''), [job?.result_url])
+  const stdoutApiUrl = useMemo(() => (job?.log_urls?.stdout ? buildApiUrl(job.log_urls.stdout) : ''), [job?.log_urls?.stdout])
+  const stderrApiUrl = useMemo(() => (job?.log_urls?.stderr ? buildApiUrl(job.log_urls.stderr) : ''), [job?.log_urls?.stderr])
+  const selectedQueryHasSpecies = useMemo(
+    () => Boolean(selectedQuery?.hits.some((hit) => Boolean(hit.sciname))),
+    [selectedQuery],
+  )
+  const queryAlgorithm = useMemo<BlastAlgorithm>(
+    () => (summary?.program || job?.method || 'blastn') as BlastAlgorithm,
+    [job?.method, summary?.program],
+  )
+  const reportProgram = useMemo(
+    () => (summary?.program || job?.method || 'BLAST').toUpperCase(),
+    [job?.method, summary?.program],
+  )
+  const reportSummaryLabel = useMemo(() => {
+    const queryCount = summary?.queryCount ?? 0
+    const databaseCount = summary?.databaseTitles.length ?? job?.databases?.length ?? 0
+    return `${reportProgram}: ${formatCount(queryCount)} ${queryCount === 1 ? 'query' : 'queries'}, ${formatCount(databaseCount)} ${databaseCount === 1 ? 'database' : 'databases'}`
+  }, [job?.databases?.length, reportProgram, summary?.databaseTitles.length, summary?.queryCount])
+  const sequenceCountLabel = useMemo(
+    () => findSummaryValue(summary?.stats, ['nsequences', 'num_sequences']),
+    [summary?.stats],
+  )
+  const characterCountLabel = useMemo(
+    () => findSummaryValue(summary?.stats, ['ncharacters', 'num_characters']),
+    [summary?.stats],
+  )
+  const hasGraphicalOverview = useMemo(() => Boolean(summary && summary.totalHits > 1), [summary])
 
   const statusTone =
     job?.status === 'failed' || job?.status === 'cancelled'
@@ -361,14 +440,14 @@ export function BlastJobDetailPage() {
         : 'status-panel'
 
   const statusMessage = useMemo(() => {
-    if (!job) return '正在加载任务信息。'
-    if (job.status === 'queued') return '任务已进入队列，页面会按设置自动刷新。'
-    if (job.status === 'running') return '任务正在运行，可查看 stdout / stderr 跟踪进度。'
-    if (job.status === 'succeeded') return '任务已成功完成，结果摘要已可查看。'
-    if (job.status === 'cancelled') return `任务已取消。${summarizeLog(stderrLog)}`
-    if (job.status === 'failed') return `任务执行失败。${summarizeLog(stderrLog)}`
-    return '任务状态未知。'
-  }, [job, stderrLog])
+    if (!job) return isChinese ? '正在加载任务信息。' : 'Loading job details.'
+    if (job.status === 'queued') return isChinese ? '任务已进入队列，页面会按设置自动刷新。' : 'The job is queued and will refresh automatically.'
+    if (job.status === 'running') return isChinese ? '任务正在运行，可查看 stdout / stderr 跟踪进度。' : 'The job is running. Check stdout and stderr for progress.'
+    if (job.status === 'succeeded') return isChinese ? '任务已成功完成，结果摘要已可查看。' : 'The job finished successfully and the result summary is available.'
+    if (job.status === 'cancelled') return isChinese ? `任务已取消。${summarizeLog(stderrLog, true)}` : `The job was cancelled. ${summarizeLog(stderrLog, false)}`
+    if (job.status === 'failed') return isChinese ? `任务执行失败。${summarizeLog(stderrLog, true)}` : `The job failed. ${summarizeLog(stderrLog, false)}`
+    return isChinese ? '任务状态未知。' : 'Unknown job status.'
+  }, [isChinese, job, stderrLog])
 
   const shareMailtoHref = useMemo(() => {
     return buildBlastResultMailto({
@@ -382,12 +461,32 @@ export function BlastJobDetailPage() {
   async function handleCopyLink() {
     try {
       await copyText(window.location.href)
-      setShareMessage('结果链接已复制。')
+      setShareMessage(isChinese ? '结果链接已复制。' : 'Result link copied.')
       window.setTimeout(() => setShareMessage(''), 2500)
     } catch {
-      setShareMessage('复制链接失败，请手动复制地址栏。')
+      setShareMessage(isChinese ? '复制链接失败，请手动复制地址栏。' : 'Copy failed. Please copy the address bar manually.')
       window.setTimeout(() => setShareMessage(''), 2500)
     }
+  }
+
+  async function handleCopyPreviewSequence() {
+    if (!previewSequence) return
+
+    try {
+      await copyText(formatSequenceAsFasta(previewSequence))
+      setShareMessage(isChinese ? 'FASTA 已复制到剪贴板。' : 'FASTA copied to clipboard.')
+      window.setTimeout(() => setShareMessage(''), 2500)
+    } catch {
+      setShareMessage(isChinese ? '复制 FASTA 失败。' : 'Failed to copy FASTA.')
+      window.setTimeout(() => setShareMessage(''), 2500)
+    }
+  }
+
+  function handleDownloadPreviewSequence() {
+    if (!previewSequence) return
+    downloadTextFile(formatSequenceAsFasta(previewSequence), `${previewSequence.id || 'sequence'}.fa`)
+    setShareMessage(isChinese ? 'FASTA 已开始下载。' : 'FASTA download started.')
+    window.setTimeout(() => setShareMessage(''), 2500)
   }
 
   function handleLoadLargeResultAnyway() {
@@ -403,460 +502,712 @@ export function BlastJobDetailPage() {
   return (
     <section className="page">
       <header className="page-header">
-        <p className="eyebrow">BLAST 任务详情</p>
+        <p className="eyebrow">{t('blastDetail.eyebrow')}</p>
         <h2>{id}</h2>
-        <p className="page-copy">这一页对应单个 BLAST 任务的状态、日志、取消与结果查看。</p>
+        <p className="page-copy">{t('blastDetail.copy')}</p>
       </header>
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      <article className={statusTone}>
+      <article className={summary ? `${statusTone} blast-report-status` : statusTone}>
         <div className="toolbar">
           <div className="toolbar-group">
-            <strong>状态提示</strong>
+            <strong>{t('blastDetail.statusHint')}</strong>
             <span>{statusMessage}</span>
           </div>
           <div className="toolbar-group">
-            <Link className="secondary-button action-link" to={`/blast/new?from_job=${id}`}>
-              重新编辑搜索
-            </Link>
-            <button className="secondary-button" onClick={handleCopyLink} type="button">
-              复制链接
-            </button>
-            <a className="secondary-button action-link" href={shareMailtoHref}>
-              邮件分享
-            </a>
+            {!summary ? (
+              <>
+                <Link className="secondary-button action-link" to="/blast/new">
+                  {isChinese ? '新建搜索' : 'New Search'}
+                </Link>
+                <Link className="secondary-button action-link" to={`/blast/new?from_job=${id}`}>
+                  {t('blastDetail.editSearch')}
+                </Link>
+                <button className="secondary-button" onClick={handleCopyLink} type="button">
+                  {t('blastDetail.copyLink')}
+                </button>
+                <a className="secondary-button action-link" href={shareMailtoHref}>
+                  {t('blastDetail.mailShare')}
+                </a>
+                {resultApiUrl ? (
+                  <a className="secondary-button action-link" href={resultApiUrl} rel="noreferrer" target="_blank">
+                    {isChinese ? '结果 API' : 'Result API'}
+                  </a>
+                ) : null}
+              </>
+            ) : null}
             <label className="inline-toggle">
               <input
                 checked={autoRefresh}
                 onChange={(event) => setAutoRefresh(event.target.checked)}
                 type="checkbox"
               />
-              <span>自动刷新</span>
+              <span>{t('jobs.autoRefresh')}</span>
             </label>
             <button className="secondary-button" disabled={refreshing} onClick={loadJob} type="button">
-              {refreshing ? '刷新中...' : '立即刷新'}
+              {refreshing ? t('jobs.refreshing') : t('blastDetail.refreshNow')}
             </button>
+            {(job?.status === 'queued' || job?.status === 'running') ? (
+              <button className="secondary-button danger-button" onClick={handleCancel} type="button">
+                {t('blastDetail.cancel')}
+              </button>
+            ) : null}
           </div>
         </div>
         <p className="toolbar-note">
-          最近刷新时间：{lastLoadedAt || '尚未完成首次加载'}
-          {autoRefresh ? '，运行中任务会每 3 秒自动刷新。' : '，当前为手动刷新模式。'}
+          {isChinese
+            ? `最近刷新时间：${lastLoadedAt || '尚未完成首次加载'}${autoRefresh ? '，运行中任务会每 3 秒自动刷新。' : '，当前为手动刷新模式。'}`
+            : `Last refreshed: ${lastLoadedAt || 'not loaded yet'}${autoRefresh ? ', running jobs refresh every 3 seconds.' : ', manual refresh mode.'}`}
         </p>
         {shareMessage ? <p className="toolbar-note">{shareMessage}</p> : null}
       </article>
 
-      <div className="two-column">
-        <article className="panel">
-          <h3>任务状态</h3>
-          {job ? (
-            <div className="detail-grid">
-              <span>状态：{job.status}</span>
-              <span>方法：{job.method || '-'}</span>
-              <span>提交时间：{job.submitted_at}</span>
-              <span>开始时间：{job.started_at || '-'}</span>
-              <span>完成时间：{job.completed_at || '-'}</span>
-              <span>退出码：{typeof job.exitstatus === 'number' ? job.exitstatus : '-'}</span>
-              <span>数据库数量：{formatCount(job.databases?.length)}</span>
-              <span>结果接口：{job.result_url || '尚未可用'}</span>
-              {(job.status === 'queued' || job.status === 'running') ? (
-                <button className="primary-button" type="button" onClick={handleCancel}>
-                  取消任务
+      {summary ? (
+        <div className="blast-report-layout">
+          <aside className="result-box blast-report-sidebar">
+            <section className="blast-report-sidebar-section">
+              <h3 className="blast-report-sidebar-title">{reportSummaryLabel}</h3>
+              <p className="toolbar-note blast-report-sidebar-note">
+                {isChinese
+                  ? `当前定位：${selectedQueryIndex >= 0 ? `Query ${formatCount(selectedQueryIndex + 1)} / ${formatCount(filteredQueries.length)}` : '尚未选中 query'}${selectedQueryHash ? `，锚点 ${selectedQueryHash}` : ''}`
+                  : `Current location: ${selectedQueryIndex >= 0 ? `Query ${formatCount(selectedQueryIndex + 1)} / ${formatCount(filteredQueries.length)}` : 'no query selected'}${selectedQueryHash ? `, anchor ${selectedQueryHash}` : ''}`}
+              </p>
+              <div className="action-list blast-report-sidebar-actions">
+                <Link className="secondary-button action-link" to="/blast/new">
+                  {isChinese ? '新建搜索' : 'New Search'}
+                </Link>
+                <Link className="secondary-button action-link" to={`/blast/new?from_job=${id}`}>
+                  {t('blastDetail.editSearch')}
+                </Link>
+                <button className="secondary-button" onClick={handleCopyLink} type="button">
+                  {t('blastDetail.copyLink')}
                 </button>
-              ) : null}
-            </div>
-          ) : (
-            <p>加载中...</p>
-          )}
-        </article>
+                <a className="secondary-button action-link" href={shareMailtoHref}>
+                  {t('blastDetail.mailShare')}
+                </a>
+                {resultApiUrl ? (
+                  <a className="secondary-button action-link" href={resultApiUrl} rel="noreferrer" target="_blank">
+                    {isChinese ? '结果 API' : 'Result API'}
+                  </a>
+                ) : null}
+              </div>
+            </section>
 
-        <article className="panel">
-          <h3>结果概览</h3>
-          {resultWarning ? (
-            <div className="result-stack">
-              <div className="result-box list-item-warning">
-                <h4>大结果预警</h4>
-                <p>{resultWarning.message}</p>
-                {resultWarning.detail ? <p className="toolbar-note">{resultWarning.detail}</p> : null}
-                <div className="detail-grid">
-                  <span>结果大小：{formatCount(resultWarning.xml_file_size)} bytes</span>
-                  <span>预警阈值：{formatCount(resultWarning.threshold)} bytes</span>
+            {(previousQuery || nextQuery) ? (
+              <section className="blast-report-sidebar-section">
+                <h4 className="blast-report-sidebar-subtitle">{isChinese ? 'Query 导航' : 'Query Navigation'}</h4>
+                <div className="blast-report-query-jump">
+                  <button
+                    className="secondary-button"
+                    disabled={!previousQuery}
+                    onClick={() => previousQuery && selectQuery(previousQuery.id, { scrollToDetail: true })}
+                    type="button"
+                  >
+                    {isChinese ? '上一个 Query' : 'Previous Query'}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={!nextQuery}
+                    onClick={() => nextQuery && selectQuery(nextQuery.id, { scrollToDetail: true })}
+                    type="button"
+                  >
+                    {isChinese ? '下一个 Query' : 'Next Query'}
+                  </button>
                 </div>
-                <div className="action-list">
-                  {resultWarning.download_links.map((link) => (
+              </section>
+            ) : null}
+
+            <section className="blast-report-sidebar-section">
+              <label className="filter-field blast-report-filter">
+                <span>{isChinese ? '筛选 query' : 'Filter Queries'}</span>
+                <input
+                  value={queryFilter}
+                  onChange={(event) => setQueryFilter(event.target.value)}
+                  placeholder={isChinese ? '输入 query ID 或标题' : 'Enter query ID or title'}
+                />
+              </label>
+              <p className="toolbar-note blast-report-sidebar-note">
+                {isChinese
+                  ? `共 ${formatCount(filteredQueries.length)} 个 query，点击左侧条目可直接切换到对应结果。`
+                  : `${formatCount(filteredQueries.length)} queries total. Click an item to open its report section.`}
+              </p>
+              <div className="blast-report-index">
+                {filteredQueries.map((query, index) => (
+                  <button
+                    className={query.id === selectedQuery?.id ? 'blast-report-index-item active' : 'blast-report-index-item'}
+                    key={query.id}
+                    onClick={() => selectQuery(query.id, { scrollToDetail: true })}
+                    type="button"
+                  >
+                    <span className="blast-report-index-number">{formatCount(query.number ?? index + 1)}</span>
+                    <span className="blast-report-index-body">
+                      <strong>{query.id}</strong>
+                      {query.title && query.title !== '-' ? <span>{query.title}</span> : null}
+                      <span className="blast-report-index-meta">
+                        {isChinese
+                          ? `长度 ${formatCount(query.length)} · 命中 ${formatCount(query.hitCount)}`
+                          : `Length ${formatCount(query.length)} · Hits ${formatCount(query.hitCount)}`}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {!filteredQueries.length ? (
+                  <p className="toolbar-note">{isChinese ? '没有匹配的 query。' : 'No matching queries.'}</p>
+                ) : null}
+              </div>
+            </section>
+
+            {job?.downloads?.length ? (
+              <section className="blast-report-sidebar-section">
+                <h4 className="blast-report-sidebar-subtitle">{isChinese ? '结果导出' : 'Result Downloads'}</h4>
+                <div className="action-list blast-report-sidebar-actions">
+                  {job.downloads.map((download) => (
                     <a
                       className="secondary-button action-link"
-                      href={buildApiUrl(link.url)}
-                      key={link.type}
+                      href={buildApiUrl(download.url)}
+                      key={download.type}
                       rel="noreferrer"
                       target="_blank"
                     >
-                      下载 {link.label}
+                      {download.label}
                     </a>
                   ))}
-                  <button className="primary-button" onClick={handleLoadLargeResultAnyway} type="button">
-                    继续在浏览器中加载
-                  </button>
                 </div>
+              </section>
+            ) : null}
+          </aside>
+
+          <div className="blast-report-main">
+            <section className="result-box blast-report-section">
+              <div className="blast-report-section-header">
+                <h3>Run Summary</h3>
+                <span className="blast-report-section-kicker">{reportProgram}</span>
               </div>
-            </div>
-          ) : summary ? (
-            <div className="result-stack">
-              <div className="result-summary-grid">
+              <div className="blast-report-summary-lines">
+                <p>
+                  <strong>SequenceServer</strong>{' '}
+                  {isChinese ? '使用' : 'using'}{' '}
+                  <strong>{summary.programVersion || reportProgram}</strong>
+                  {job?.submitted_at ? (isChinese ? `，提交时间 ${job.submitted_at}` : `, query submitted on ${job.submitted_at}`) : ''}
+                </p>
+                <p>
+                  <strong>{isChinese ? '数据库' : 'Databases'}:</strong>{' '}
+                  {summary.databaseTitles.length ? summary.databaseTitles.join(isChinese ? '，' : ', ') : '-'}
+                  {(sequenceCountLabel || characterCountLabel)
+                    ? ` (${sequenceCountLabel || '-'} ${isChinese ? '条序列' : 'sequences'}, ${characterCountLabel || '-'} ${isChinese ? '个字符' : 'characters'})`
+                    : ''}
+                </p>
+                {summary.params.length ? (
+                  <p>
+                    <strong>{isChinese ? '参数' : 'Parameters'}:</strong>{' '}
+                    {summary.params.map((item) => `${item.key} ${item.value}`).join(', ')}
+                  </p>
+                ) : null}
+                <p>
+                  <strong>{isChinese ? '搜索 ID' : 'Search ID'}:</strong> {summary.searchId || id}
+                </p>
+                <p>
+                  <strong>{isChinese ? '引用' : 'Citation'}:</strong>{' '}
+                  <a href="https://doi.org/10.1093/molbev/msz185" rel="noreferrer" target="_blank">
+                    https://doi.org/10.1093/molbev/msz185
+                  </a>
+                </p>
+              </div>
+              <div className="blast-report-stat-strip">
                 <div className="result-stat">
-                  <span className="result-stat-label">程序</span>
-                  <strong>{summary.program || '-'}</strong>
-                </div>
-                <div className="result-stat">
-                  <span className="result-stat-label">查询数</span>
+                  <span className="result-stat-label">{isChinese ? '查询数' : 'Queries'}</span>
                   <strong>{formatCount(summary.queryCount)}</strong>
                 </div>
                 <div className="result-stat">
-                  <span className="result-stat-label">有命中的查询</span>
+                  <span className="result-stat-label">{isChinese ? '有命中的查询' : 'Queries With Hits'}</span>
                   <strong>{formatCount(summary.queriesWithHits)}</strong>
                 </div>
                 <div className="result-stat">
-                  <span className="result-stat-label">总命中数</span>
+                  <span className="result-stat-label">{isChinese ? '总命中数' : 'Total Hits'}</span>
                   <strong>{formatCount(summary.totalHits)}</strong>
                 </div>
               </div>
+            </section>
 
-              <div className="detail-grid">
-                <span>搜索 ID：{summary.searchId || id}</span>
-                <span>程序版本：{summary.programVersion || '-'}</span>
-                <span>数据库：{summary.databaseTitles.length ? summary.databaseTitles.join('，') : '-'}</span>
+            <section className="result-box blast-report-section">
+              <div className="blast-report-section-header">
+                <h3>Graphical Overview</h3>
               </div>
-
-              {job?.downloads?.length ? (
-                <div className="result-box">
-                  <h4>结果导出</h4>
-                  <p className="toolbar-note">导出接口已经切换到新的 API 路由，前端不再依赖旧版页面下载地址。</p>
-                  <div className="action-list">
-                    {job.downloads.map((download) => (
-                      <a
-                        className="secondary-button action-link"
-                        href={buildApiUrl(download.url)}
-                        key={download.type}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {download.label}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <BlastVisualOverview selectedQuery={selectedQuery} summary={summary} />
-
-              {summary.params.length ? (
-                <div className="result-box">
-                  <h4>运行参数</h4>
-                  <div className="key-value-grid">
-                    {summary.params.slice(0, 8).map((item) => (
-                      <div key={item.key} className="key-value-item">
-                        <span>{item.key}</span>
-                        <strong>{item.value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {summary.stats.length ? (
-                <div className="result-box">
-                  <h4>统计信息</h4>
-                  <div className="key-value-grid">
-                    {summary.stats.map((item) => (
-                      <div key={item.key} className="key-value-item">
-                        <span>{item.key}</span>
-                        <strong>{item.value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="result-box">
-                <h4>查询摘要</h4>
-                <label className="filter-field">
-                  <span>筛选 query</span>
-                  <input
-                    value={queryFilter}
-                    onChange={(event) => setQueryFilter(event.target.value)}
-                    placeholder="输入 query ID 或标题"
-                  />
-                </label>
-                <div className="pagination-bar">
-                  <span className="toolbar-note">
-                    共 {formatCount(filteredQueries.length)} 个 query，当前第 {formatCount(queryPage)} / {formatCount(totalQueryPages)} 页。
-                  </span>
-                  <div className="toolbar-group">
-                    <button
-                      className="secondary-button"
-                      disabled={queryPage <= 1}
-                      onClick={() => setQueryPage((current) => Math.max(1, current - 1))}
-                      type="button"
-                    >
-                      上一页
-                    </button>
-                    <button
-                      className="secondary-button"
-                      disabled={queryPage >= totalQueryPages}
-                      onClick={() => setQueryPage((current) => Math.min(totalQueryPages, current + 1))}
-                      type="button"
-                    >
-                      下一页
-                    </button>
-                  </div>
-                </div>
+              {hasGraphicalOverview ? (
+                <BlastVisualOverview selectedQuery={selectedQuery} summary={summary} />
+              ) : (
                 <p className="toolbar-note">
-                  结果页已支持 query 锚点链接。当前选中的 query 会同步到地址栏 hash，刷新或分享链接后可直接定位。
+                  {isChinese
+                    ? '当前结果中的命中数量不足以展示全局图形总览。'
+                    : 'There are not enough hits in the current result set to render the graphical overview.'}
                 </p>
-                <div className="list">
-                  {visibleQueries.map((query) => (
-                    <button
-                      className={query.id === selectedQuery?.id ? 'list-item query-item query-item-active' : 'list-item query-item'}
-                      key={query.id}
-                      onClick={() => selectQuery(query.id, { scrollToDetail: true })}
-                      type="button"
-                    >
-                      <strong>{query.id}</strong>
-                      <span>标题：{query.title || '-'}</span>
-                      <span>序号：{formatCount(query.number)}</span>
-                      <span>长度：{formatCount(query.length)}</span>
-                      <span>命中数：{formatCount(query.hitCount)}</span>
-                      {query.topHit ? (
-                        <span>
-                          Top hit：{query.topHit.id}
-                          {query.topHit.title ? ` / ${query.topHit.title}` : ''}
-                          {typeof query.topHit.totalScore === 'number' ? ` / score ${query.topHit.totalScore}` : ''}
-                          {typeof query.topHit.qcovs === 'number' ? ` / qcov ${query.topHit.qcovs}%` : ''}
-                        </span>
-                      ) : (
-                        <span>Top hit：无命中</span>
-                      )}
-                    </button>
-                  ))}
-                  {!filteredQueries.length ? <p>没有匹配的 query。</p> : null}
-                </div>
-              </div>
+              )}
+            </section>
 
-              {selectedQuery ? (
-                <div className="result-box" id={QUERY_DETAIL_SECTION_ID}>
-                  <h4>Query 详细浏览</h4>
-                  <div className="pagination-bar">
+            {selectedQuery ? (
+              <section className="result-box report-query-section blast-report-section" id={QUERY_DETAIL_SECTION_ID}>
+                <div className="report-query-header">
+                  <div className="report-query-title">
+                    <h3>
+                      <strong>Query=</strong>
+                      <span>{selectedQuery.id}</span>
+                      {selectedQuery.title && selectedQuery.title !== '-' ? <span>{selectedQuery.title}</span> : null}
+                    </h3>
+                  </div>
+                  <span className="report-query-meta">
+                    {selectedQueryIndex >= 0
+                      ? isChinese
+                        ? `query ${formatCount(selectedQueryIndex + 1)}，长度 ${formatCount(selectedQuery.length)}，命中 ${formatCount(selectedQuery.hitCount)}`
+                        : `query ${formatCount(selectedQueryIndex + 1)}, length ${formatCount(selectedQuery.length)}, hits ${formatCount(selectedQuery.hitCount)}`
+                      : isChinese
+                        ? `长度 ${formatCount(selectedQuery.length)}，命中 ${formatCount(selectedQuery.hitCount)}`
+                        : `length ${formatCount(selectedQuery.length)}, hits ${formatCount(selectedQuery.hitCount)}`}
+                  </span>
+                </div>
+
+                <div className="report-query-toolbar">
+                  <span className="toolbar-note">
+                    {isChinese
+                      ? `当前 query：${formatCount(selectedQueryIndex + 1)} / ${formatCount(filteredQueries.length)}${selectedQueryHash ? `，锚点 ${selectedQueryHash}` : ''}`
+                      : `Current query: ${formatCount(selectedQueryIndex + 1)} / ${formatCount(filteredQueries.length)}${selectedQueryHash ? `, anchor ${selectedQueryHash}` : ''}`}
+                  </span>
+                </div>
+
+                <BlastQueryOverview
+                  algorithm={summary.program || job?.method || 'blastn'}
+                  onFocusHit={focusHitCard}
+                  query={selectedQuery}
+                  searchId={summary.searchId || id}
+                  variant="inline"
+                />
+
+                <section className="report-query-subsection">
+                  <div className="report-query-subsection-header">
+                    <h4>{isChinese ? '命中总表' : 'Hit Table'}</h4>
+                  </div>
+                  <p className="toolbar-note report-query-subsection-copy">
+                    {isChinese
+                      ? '按旧版结果页常用方式提供 query 级命中总表，点击表内条目可直接定位到下方对应命中卡片。'
+                      : 'Provides a query-level hit table similar to the legacy result page. Click a row to jump to the corresponding hit card below.'}
+                  </p>
+                  <div className="table-scroll">
+                    <table className="result-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>{isChinese ? '相似序列' : 'Similar Sequences'}</th>
+                          {selectedQueryHasSpecies ? <th>{isChinese ? '物种' : 'Species'}</th> : null}
+                          <th>{isChinese ? 'Query 覆盖度 (%)' : 'Query Coverage (%)'}</th>
+                          <th>{isChinese ? '总分' : 'Total Score'}</th>
+                          <th>{isChinese ? 'E 值' : 'E-value'}</th>
+                          <th>{isChinese ? '一致性 (%)' : 'Identity (%)'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedQuery.hits.map((hit, index) => {
+                          const firstHsp = hit.hsps[0]
+
+                          return (
+                            <tr key={`${selectedQuery.id}-table-${hit.id}`}>
+                              <td>{index + 1}</td>
+                              <td>
+                                <button className="table-link-button" onClick={() => focusHitCard(hit.id)} type="button">
+                                  {hit.id} {hit.title && hit.title !== '-' ? hit.title : ''}
+                                </button>
+                              </td>
+                              {selectedQueryHasSpecies ? <td>{hit.sciname || '-'}</td> : null}
+                              <td>{typeof hit.qcovs === 'number' ? hit.qcovs : '-'}</td>
+                              <td>{typeof hit.totalScore === 'number' ? hit.totalScore : '-'}</td>
+                              <td>{formatEvalueDisplay(firstHsp?.evalue)}</td>
+                              <td>{formatIdentityPercent(firstHsp?.identity, firstHsp?.length)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section className="report-query-subsection">
+                  <div className="report-query-subsection-header">
+                    <h4>{isChinese ? '命中列表' : 'Hits'}</h4>
                     <span className="toolbar-note">
-                      当前 query：{formatCount(selectedQueryIndex + 1)} / {formatCount(filteredQueries.length)}
-                      {selectedQueryHash ? `，锚点 ${selectedQueryHash}` : ''}
+                      {isChinese
+                        ? `当前 query 共 ${formatCount(selectedQuery.hitCount)} 个命中，当前第 ${formatCount(hitPage)} / ${formatCount(totalHitPages)} 页。`
+                        : `This query has ${formatCount(selectedQuery.hitCount)} hits, page ${formatCount(hitPage)} / ${formatCount(totalHitPages)}.`}
                     </span>
+                  </div>
+                  <div className="report-query-toolbar">
+                    <div className="toolbar-group">
+                      {HIT_PAGE_SIZE_OPTIONS.map((size) => (
+                        <button
+                          className={hitPageSize === size ? 'secondary-button active' : 'secondary-button'}
+                          key={size}
+                          onClick={() => setHitPageSize(size)}
+                          type="button"
+                        >
+                          {isChinese ? `每页 ${size}` : `${size} / page`}
+                        </button>
+                      ))}
+                    </div>
                     <div className="toolbar-group">
                       <button
                         className="secondary-button"
-                        disabled={!previousQuery}
-                        onClick={() => previousQuery && selectQuery(previousQuery.id, { scrollToDetail: true })}
+                        disabled={hitPage <= 1}
+                        onClick={() => setHitPage((current) => Math.max(1, current - 1))}
                         type="button"
                       >
-                        上一个 Query
+                        {isChinese ? '上一页' : 'Previous'}
                       </button>
                       <button
                         className="secondary-button"
-                        disabled={!nextQuery}
-                        onClick={() => nextQuery && selectQuery(nextQuery.id, { scrollToDetail: true })}
+                        disabled={hitPage >= totalHitPages}
+                        onClick={() => setHitPage((current) => Math.min(totalHitPages, current + 1))}
                         type="button"
                       >
-                        下一个 Query
+                        {isChinese ? '下一页' : 'Next'}
                       </button>
                     </div>
                   </div>
-                  <div className="detail-grid">
-                    <span>ID：{selectedQuery.id}</span>
-                    <span>标题：{selectedQuery.title || '-'}</span>
-                    <span>序号：{formatCount(selectedQuery.number)}</span>
-                    <span>长度：{formatCount(selectedQuery.length)}</span>
-                    <span>命中数：{formatCount(selectedQuery.hitCount)}</span>
+                  <div className="action-list">
+                    <button
+                      className="secondary-button"
+                      disabled={!selectedHitIds.length || !databaseIds.length}
+                      onClick={handleDownloadSelectedHits}
+                      type="button"
+                    >
+                      {isChinese ? '下载已选 hits FASTA' : 'Download Selected Hits FASTA'}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      disabled={!selectedHitIds.length}
+                      onClick={handleDownloadSelectedHitsAlignment}
+                      type="button"
+                    >
+                      {isChinese ? '下载已选 hits Alignment' : 'Download Selected Hits Alignment'}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      disabled={!selectedQuery.hits.length || !databaseIds.length}
+                      onClick={handleDownloadAllQueryHits}
+                      type="button"
+                    >
+                      {isChinese ? '下载当前 query 全部命中 FASTA' : 'Download All Hits for This Query'}
+                    </button>
                   </div>
-
-                  <div className="result-box">
-                    <h4>命中序列操作</h4>
-                    <p className="toolbar-note">
-                      当前 query 共 {formatCount(selectedQuery.hitCount)} 个命中，当前第 {formatCount(hitPage)} / {formatCount(totalHitPages)} 页。
-                    </p>
-                    <div className="pagination-bar">
-                      <div className="toolbar-group">
-                        {HIT_PAGE_SIZE_OPTIONS.map((size) => (
-                          <button
-                            className={hitPageSize === size ? 'secondary-button active' : 'secondary-button'}
-                            key={size}
-                            onClick={() => setHitPageSize(size)}
-                            type="button"
-                          >
-                            每页 {size}
+                  <p className="toolbar-note">
+                    {isChinese
+                      ? `已选择 ${formatCount(selectedHitIds.length)} 个 hit。${selectedHitDownloadUrl ? ` 也可直接通过 ${selectedHitDownloadUrl} 发起 GET 下载。` : ''}`
+                      : `${formatCount(selectedHitIds.length)} hits selected.${selectedHitDownloadUrl ? ` You can also use ${selectedHitDownloadUrl} for a direct GET download.` : ''}`}
+                  </p>
+                  {previewLoading ? <p>{isChinese ? '命中序列加载中...' : 'Loading hit sequence...'}</p> : null}
+                  {previewError ? <p className="error-text">{previewError}</p> : null}
+                  {previewSequence ? (
+                    <div className="sequence-preview">
+                      <div className="toolbar">
+                        <div className="toolbar-group">
+                          <strong>{previewSequence.id}</strong>
+                          <span>{previewSequence.title || '-'}</span>
+                        </div>
+                        <div className="toolbar-group">
+                          <span>{isChinese ? '长度' : 'Length'}：{formatCount(previewSequence.length)}</span>
+                          <button className="secondary-button" onClick={handleCopyPreviewSequence} type="button">
+                            {isChinese ? '复制 FASTA' : 'Copy FASTA'}
                           </button>
-                        ))}
+                          <button className="secondary-button" onClick={handleDownloadPreviewSequence} type="button">
+                            {isChinese ? '下载 FASTA' : 'Download FASTA'}
+                          </button>
+                        </div>
                       </div>
-                      <div className="toolbar-group">
-                        <button
-                          className="secondary-button"
-                          disabled={hitPage <= 1}
-                          onClick={() => setHitPage((current) => Math.max(1, current - 1))}
-                          type="button"
-                        >
-                          上一页
-                        </button>
-                        <button
-                          className="secondary-button"
-                          disabled={hitPage >= totalHitPages}
-                          onClick={() => setHitPage((current) => Math.min(totalHitPages, current + 1))}
-                          type="button"
-                        >
-                          下一页
-                        </button>
-                      </div>
+                      <pre className="sequence-box">{formatSequenceAsFasta(previewSequence)}</pre>
                     </div>
-                    <div className="action-list">
-                      <button
-                        className="secondary-button"
-                        disabled={!selectedHitIds.length || !databaseIds.length}
-                        onClick={handleDownloadSelectedHits}
-                        type="button"
-                      >
-                        下载已选 hits FASTA
-                      </button>
-                      <button
-                        className="secondary-button"
-                        disabled={!selectedQuery.hits.length || !databaseIds.length}
-                        onClick={handleDownloadAllQueryHits}
-                        type="button"
-                      >
-                        下载当前 query 全部命中 FASTA
-                      </button>
-                    </div>
-                    <p className="toolbar-note">
-                      已选择 {formatCount(selectedHitIds.length)} 个 hit。
-                      {selectedHitDownloadUrl ? ` 也可直接通过 ${selectedHitDownloadUrl} 发起 GET 下载。` : ''}
-                    </p>
-                    {previewLoading ? <p>命中序列加载中...</p> : null}
-                    {previewError ? <p className="error-text">{previewError}</p> : null}
-                    {previewSequence ? (
-                      <div className="sequence-preview">
-                        <div className="toolbar">
-                          <div className="toolbar-group">
-                            <strong>{previewSequence.id}</strong>
-                            <span>{previewSequence.title || '-'}</span>
+                  ) : null}
+                </section>
+
+                <div className="list report-hit-list">
+                  {visibleHits.map((hit) => {
+                    const firstHsp = hit.hsps[0]
+                    const checked = selectedHitIds.includes(hit.id)
+
+                    return (
+                      <div className="subresult-card report-hit-card" id={hitCardId(selectedQuery.id, hit.id)} key={`${selectedQuery.id}-${hit.id}`}>
+                        <div className="subresult-card-header">
+                          <div className="subresult-card-title">
+                            <strong>{hit.id}</strong>
+                            {hit.title && hit.title !== '-' ? <span>{hit.title}</span> : null}
                           </div>
-                          <div className="toolbar-group">
-                            <span>长度：{formatCount(previewSequence.length)}</span>
+                          <div className="subresult-card-actions">
+                            <label className="inline-toggle">
+                              <input
+                                checked={checked}
+                                onChange={(event) => toggleHitSelection(hit.id, event.target.checked)}
+                                type="checkbox"
+                              />
+                              <span>{isChinese ? '选中' : 'Select'}</span>
+                            </label>
+                            <button
+                              className={previewSequence?.id === hit.id ? 'secondary-button active' : 'secondary-button'}
+                              onClick={() => handlePreviewSequence(hit.id)}
+                              type="button"
+                            >
+                              {isChinese ? '查看序列' : 'View Sequence'}
+                            </button>
                           </div>
                         </div>
-                        <pre className="sequence-box">{formatSequenceAsFasta(previewSequence)}</pre>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="list">
-                    {visibleHits.map((hit) => {
-                      const firstHsp = hit.hsps[0]
-                      const checked = selectedHitIds.includes(hit.id)
-
-                      return (
-                        <div className="subresult-card" key={`${selectedQuery.id}-${hit.id}`}>
-                          <div className="subresult-card-header">
-                            <div className="subresult-card-title">
-                              <strong>{hit.id}</strong>
-                            </div>
-                            <div className="subresult-card-actions">
-                              <label className="inline-toggle">
-                                <input
-                                  checked={checked}
-                                  onChange={(event) => toggleHitSelection(hit.id, event.target.checked)}
-                                  type="checkbox"
-                                />
-                                <span>选中</span>
-                              </label>
-                              <button
-                                className={previewSequence?.id === hit.id ? 'secondary-button active' : 'secondary-button'}
-                                onClick={() => handlePreviewSequence(hit.id)}
-                                type="button"
+                        {appConfig.hitActions.length ? (
+                          <div className="action-list">
+                            {resolveHitActions(
+                              appConfig.hitActions,
+                              {
+                                jobId: id,
+                                queryId: selectedQuery.id,
+                                queryTitle: selectedQuery.title,
+                                hitId: hit.id,
+                                hitTitle: hit.title,
+                                species: hit.sciname,
+                                databaseIds,
+                              },
+                              isChinese,
+                            ).map((action) => (
+                              <a
+                                className="secondary-button action-link"
+                                href={action.url}
+                                key={`${hit.id}-${action.id}`}
+                                rel={action.target === '_blank' ? 'noreferrer' : undefined}
+                                target={action.target}
                               >
-                                查看序列
-                              </button>
+                                {action.label}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                        {hit.links.length ? (
+                          <div className="action-list">
+                            {hit.links.map((link, index) => (
+                              <a
+                                className="secondary-button action-link"
+                                href={link.url}
+                                key={`${hit.id}-link-${index}`}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                {link.title}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                        {hit.accession ? <span>{isChinese ? 'Accession' : 'Accession'}：{hit.accession}</span> : null}
+                        <span>{isChinese ? '长度' : 'Length'}：{formatCount(hit.length)}</span>
+                        <span>{isChinese ? '总分' : 'Total Score'}：{typeof hit.totalScore === 'number' ? hit.totalScore : '-'}</span>
+                        <span>{isChinese ? 'Query 覆盖度' : 'Query Coverage'}：{typeof hit.qcovs === 'number' ? `${hit.qcovs}%` : '-'}</span>
+                        <span>{isChinese ? '物种' : 'Species'}：{hit.sciname || '-'}</span>
+                        {firstHsp ? (
+                          <div className="key-value-grid">
+                            <div className="key-value-item">
+                              <span>{isChinese ? 'E 值' : 'E-value'}</span>
+                              <strong>{firstHsp.evalue ?? '-'}</strong>
+                            </div>
+                            <div className="key-value-item">
+                              <span>{isChinese ? 'Bit Score' : 'Bit Score'}</span>
+                              <strong>{firstHsp.bitScore ?? '-'}</strong>
+                            </div>
+                            <div className="key-value-item">
+                              <span>{isChinese ? '一致性' : 'Identity'}</span>
+                              <strong>{firstHsp.identity ?? '-'}</strong>
+                            </div>
+                            <div className="key-value-item">
+                              <span>{isChinese ? '比对长度' : 'Alignment Length'}</span>
+                              <strong>{firstHsp.length ?? '-'}</strong>
+                            </div>
+                            <div className="key-value-item">
+                              <span>{isChinese ? 'HSP Query 覆盖度' : 'HSP Query Coverage'}</span>
+                              <strong>{typeof firstHsp.qcovhsp === 'number' ? `${firstHsp.qcovhsp}%` : '-'}</strong>
+                            </div>
+                            <div className="key-value-item">
+                              <span>{isChinese ? 'Query 区间' : 'Query Range'}</span>
+                              <strong>{firstHsp.qstart ?? '-'} - {firstHsp.qend ?? '-'}</strong>
+                            </div>
+                            <div className="key-value-item">
+                              <span>{isChinese ? 'Subject 区间' : 'Subject Range'}</span>
+                              <strong>{firstHsp.sstart ?? '-'} - {firstHsp.send ?? '-'}</strong>
                             </div>
                           </div>
-                          <span>标题：{hit.title || '-'}</span>
-                          <span>长度：{formatCount(hit.length)}</span>
-                          <span>总分：{typeof hit.totalScore === 'number' ? hit.totalScore : '-'}</span>
-                          <span>Query coverage：{typeof hit.qcovs === 'number' ? `${hit.qcovs}%` : '-'}</span>
-                          <span>物种：{hit.sciname || '-'}</span>
-                          {firstHsp ? (
-                            <div className="key-value-grid">
-                              <div className="key-value-item">
-                                <span>evalue</span>
-                                <strong>{firstHsp.evalue ?? '-'}</strong>
-                              </div>
-                              <div className="key-value-item">
-                                <span>bit score</span>
-                                <strong>{firstHsp.bitScore ?? '-'}</strong>
-                              </div>
-                              <div className="key-value-item">
-                                <span>identity</span>
-                                <strong>{firstHsp.identity ?? '-'}</strong>
-                              </div>
-                              <div className="key-value-item">
-                                <span>alignment length</span>
-                                <strong>{firstHsp.length ?? '-'}</strong>
-                              </div>
-                              <div className="key-value-item">
-                                <span>qcovhsp</span>
-                                <strong>{typeof firstHsp.qcovhsp === 'number' ? `${firstHsp.qcovhsp}%` : '-'}</strong>
-                              </div>
-                              <div className="key-value-item">
-                                <span>query range</span>
-                                <strong>{firstHsp.qstart ?? '-'} - {firstHsp.qend ?? '-'}</strong>
-                              </div>
-                              <div className="key-value-item">
-                                <span>subject range</span>
-                                <strong>{firstHsp.sstart ?? '-'} - {firstHsp.send ?? '-'}</strong>
-                              </div>
-                            </div>
-                          ) : (
-                            <span>首个 HSP：无</span>
-                          )}
-                          <BlastAlignmentViewer
-                            algorithm={summary.program || job?.method || 'blastn'}
-                            hit={hit}
-                            queryId={selectedQuery.id}
-                            queryLength={selectedQuery.length}
-                          />
-                        </div>
-                      )
-                    })}
-                    {!selectedQuery.hits.length ? <p>该 query 没有命中结果。</p> : null}
-                  </div>
+                        ) : (
+                          <span>{isChinese ? '首个 HSP：无' : 'First HSP: none'}</span>
+                        )}
+                        <BlastAlignmentViewer
+                          algorithm={summary.program || job?.method || 'blastn'}
+                          hit={hit}
+                          queryId={selectedQuery.id}
+                          queryLength={selectedQuery.length}
+                        />
+                      </div>
+                    )
+                  })}
+                  {!selectedQuery.hits.length ? <p>{isChinese ? '该 query 没有命中结果。' : 'This query has no hits.'}</p> : null}
+                </div>
+              </section>
+            ) : (
+              <section className="result-box blast-report-section">
+                <p>{isChinese ? '当前筛选条件下没有可展示的 query。' : 'No query is available under the current filter.'}</p>
+              </section>
+            )}
+
+            <CollapsibleSection
+              className="result-box"
+              defaultCollapsed={true}
+              storageKey={`blast:${id}:execution-details`}
+              title={isChinese ? '执行细节' : 'Execution Details'}
+              actions={
+                <>
+                  {resultApiUrl ? (
+                    <a className="secondary-button action-link" href={resultApiUrl} rel="noreferrer" target="_blank">
+                      {isChinese ? '结果 API' : 'Result API'}
+                    </a>
+                  ) : null}
+                  {stdoutApiUrl ? (
+                    <a className="secondary-button action-link" href={stdoutApiUrl} rel="noreferrer" target="_blank">
+                      stdout API
+                    </a>
+                  ) : null}
+                  {stderrApiUrl ? (
+                    <a className="secondary-button action-link" href={stderrApiUrl} rel="noreferrer" target="_blank">
+                      stderr API
+                    </a>
+                  ) : null}
+                </>
+              }
+            >
+              {job ? (
+                <div className="detail-grid">
+                  <span>{isChinese ? '状态' : 'Status'}：{job.status}</span>
+                  <span>{isChinese ? '方法' : 'Method'}：{job.method || '-'}</span>
+                  <span>{isChinese ? '提交时间' : 'Submitted At'}：{job.submitted_at}</span>
+                  <span>{isChinese ? '开始时间' : 'Started At'}：{job.started_at || '-'}</span>
+                  <span>{isChinese ? '完成时间' : 'Completed At'}：{job.completed_at || '-'}</span>
+                  <span>{isChinese ? '退出码' : 'Exit Code'}：{typeof job.exitstatus === 'number' ? job.exitstatus : '-'}</span>
+                  <span>{isChinese ? '数据库数量' : 'Database Count'}：{formatCount(job.databases?.length)}</span>
+                  <span>{isChinese ? '结果接口' : 'Result API'}：{job.result_url || (isChinese ? '尚未可用' : 'Not available yet')}</span>
+                </div>
+              ) : (
+                <p>{isChinese ? '加载中...' : 'Loading...'}</p>
+              )}
+              {summary.stats.length ? (
+                <div className="key-value-grid">
+                  {summary.stats.map((item) => (
+                    <div key={item.key} className="key-value-item">
+                      <span>{item.key}</span>
+                      <strong>{item.value}</strong>
+                    </div>
+                  ))}
                 </div>
               ) : null}
+            </CollapsibleSection>
 
-              <details className="raw-result">
-                <summary>查看原始结果 JSON</summary>
-                <pre className="log-box">{JSON.stringify(result, null, 2)}</pre>
-              </details>
-            </div>
-          ) : (
-            <p>任务未完成或结果尚未加载。</p>
-          )}
-        </article>
-      </div>
+            <CollapsibleSection
+              className="result-box"
+              defaultCollapsed={true}
+              storageKey={`blast:${id}:raw-json`}
+              title={isChinese ? '原始结果 JSON' : 'Raw Result JSON'}
+            >
+              <pre className="log-box">{JSON.stringify(result, null, 2)}</pre>
+            </CollapsibleSection>
+          </div>
+        </div>
+      ) : (
+        <div className="two-column">
+          <article className="panel">
+            <h3>{t('blastDetail.taskStatus')}</h3>
+            {job ? (
+              <div className="detail-grid">
+                <span>{isChinese ? '状态' : 'Status'}：{job.status}</span>
+                <span>{isChinese ? '方法' : 'Method'}：{job.method || '-'}</span>
+                <span>{isChinese ? '提交时间' : 'Submitted At'}：{job.submitted_at}</span>
+                <span>{isChinese ? '开始时间' : 'Started At'}：{job.started_at || '-'}</span>
+                <span>{isChinese ? '完成时间' : 'Completed At'}：{job.completed_at || '-'}</span>
+                <span>{isChinese ? '退出码' : 'Exit Code'}：{typeof job.exitstatus === 'number' ? job.exitstatus : '-'}</span>
+                <span>{isChinese ? '数据库数量' : 'Database Count'}：{formatCount(job.databases?.length)}</span>
+                <span>{isChinese ? '结果接口' : 'Result API'}：{job.result_url || (isChinese ? '尚未可用' : 'Not available yet')}</span>
+              </div>
+            ) : (
+              <p>{isChinese ? '加载中...' : 'Loading...'}</p>
+            )}
+          </article>
 
-      <div className="two-column">
+          <article className="panel">
+            <h3>{t('blastDetail.resultSummary')}</h3>
+            {resultWarning ? (
+              <div className="result-stack">
+                <div className="result-box list-item-warning">
+                  <h4>{isChinese ? '大结果预警' : 'Large Result Warning'}</h4>
+                  <p>{resultWarning.message}</p>
+                  {resultWarning.detail ? <p className="toolbar-note">{resultWarning.detail}</p> : null}
+                  <div className="detail-grid">
+                    <span>{isChinese ? '结果大小' : 'Result Size'}：{formatCount(resultWarning.xml_file_size)} bytes</span>
+                    <span>{isChinese ? '预警阈值' : 'Warning Threshold'}：{formatCount(resultWarning.threshold)} bytes</span>
+                  </div>
+                  <div className="action-list">
+                    {resultWarning.download_links.map((link) => (
+                      <a
+                        className="secondary-button action-link"
+                        href={buildApiUrl(link.url)}
+                        key={link.type}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {isChinese ? `下载 ${link.label}` : `Download ${link.label}`}
+                      </a>
+                    ))}
+                    <button className="primary-button" onClick={handleLoadLargeResultAnyway} type="button">
+                      {isChinese ? '继续在浏览器中加载' : 'Continue Loading in Browser'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p>{isChinese ? '任务未完成或结果尚未加载。' : 'The job is not finished or the result has not been loaded yet.'}</p>
+            )}
+          </article>
+        </div>
+      )}
+
+      <div className={summary ? 'blast-report-log-grid' : 'two-column'}>
         <article className="panel">
-          <h3>stdout</h3>
-          <p className="toolbar-note">摘要：{summarizeLog(stdoutLog)}</p>
-          <pre className="log-box">{stdoutLog?.content || '暂无输出'}</pre>
+          <CollapsibleSection
+            className=""
+            defaultCollapsed={true}
+            storageKey={`blast:${id}:stdout`}
+            title={isChinese ? 'stdout 日志' : 'stdout Log'}
+            actions={
+              stdoutApiUrl ? (
+                <a className="secondary-button action-link" href={stdoutApiUrl} rel="noreferrer" target="_blank">
+                  {isChinese ? '打开 API' : 'Open API'}
+                </a>
+              ) : undefined
+            }
+          >
+            <p className="toolbar-note">{isChinese ? '摘要' : 'Summary'}：{summarizeLog(stdoutLog, isChinese)}</p>
+            <pre className="log-box">{stdoutLog?.content || (isChinese ? '暂无输出' : 'No output')}</pre>
+          </CollapsibleSection>
         </article>
         <article className="panel">
-          <h3>stderr</h3>
-          <p className="toolbar-note">摘要：{summarizeLog(stderrLog)}</p>
-          <pre className="log-box">{stderrLog?.content || '暂无输出'}</pre>
+          <CollapsibleSection
+            className=""
+            defaultCollapsed={true}
+            storageKey={`blast:${id}:stderr`}
+            title={isChinese ? 'stderr 日志' : 'stderr Log'}
+            actions={
+              stderrApiUrl ? (
+                <a className="secondary-button action-link" href={stderrApiUrl} rel="noreferrer" target="_blank">
+                  {isChinese ? '打开 API' : 'Open API'}
+                </a>
+              ) : undefined
+            }
+          >
+            <p className="toolbar-note">{isChinese ? '摘要' : 'Summary'}：{summarizeLog(stderrLog, isChinese)}</p>
+            <pre className="log-box">{stderrLog?.content || (isChinese ? '暂无输出' : 'No output')}</pre>
+          </CollapsibleSection>
         </article>
       </div>
     </section>

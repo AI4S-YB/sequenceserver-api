@@ -19,11 +19,19 @@ describe('summarizeBlastResult', () => {
           hits: [
             {
               id: 'hit_1',
+              accession: 'ACC001',
               title: 'Example hit',
               length: 300,
               total_score: 220,
               qcovs: 95,
               sciname: 'Arabidopsis thaliana',
+              links: [
+                {
+                  title: 'NCBI',
+                  url: 'https://example.org/hit_1',
+                  icon: 'fa-external-link',
+                },
+              ],
               hsps: [
                 {
                   number: 1,
@@ -53,6 +61,15 @@ describe('summarizeBlastResult', () => {
     expect(summary?.totalHits).toBe(1)
     expect(summary?.queries[0]?.id).toBe('query_1')
     expect(summary?.queries[0]?.topHit?.id).toBe('hit_1')
+    expect(summary?.queries[0]?.topHit?.accession).toBe('ACC001')
+    expect(summary?.queries[0]?.topHit?.links).toEqual([
+      {
+        title: 'NCBI',
+        url: 'https://example.org/hit_1',
+        icon: 'fa-external-link',
+        className: undefined,
+      },
+    ])
     expect(summary?.queries[0]?.hits[0]?.hsps[0]?.bitScore).toBe(180.5)
   })
 
