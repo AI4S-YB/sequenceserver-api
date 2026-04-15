@@ -10,10 +10,10 @@
 
 典型旧页面与旧逻辑位置：
 
-- [views/search.erb](/Users/kentnf/projects/omicsagent/sequenceserver/views/search.erb)
-- [views/report.erb](/Users/kentnf/projects/omicsagent/sequenceserver/views/report.erb)
-- [public/js/search.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/search.js)
-- [public/js/report.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/report.js)
+- [views/search.erb](../views/search.erb)
+- [views/report.erb](../views/report.erb)
+- [public/js/search.js](../public/js/search.js)
+- [public/js/report.js](../public/js/report.js)
 
 因此原项目本质上是“后端渲染 + 前端增强”的混合模式。
 
@@ -105,13 +105,13 @@
 
 相关说明文档：
 
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
+- [docs/api-import-security.md](api-import-security.md)
 
 ## 6. 新前端当前状态
 
 当前新前端目录：
 
-- [sequenceserver-web](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web)
+- [sequenceserver-web](../sequenceserver-web)
 
 技术栈：
 
@@ -281,25 +281,25 @@
 
 新前端主目录：
 
-- [sequenceserver-web](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web)
+- [sequenceserver-web](../sequenceserver-web)
 
 后端 API 路由：
 
-- [lib/sequenceserver/api/v1/routes.rb](/Users/kentnf/projects/omicsagent/sequenceserver/lib/sequenceserver/api/v1/routes.rb)
+- [lib/sequenceserver/api/v1/routes.rb](../lib/sequenceserver/api/v1/routes.rb)
 
 后端 API 帮助函数：
 
-- [lib/sequenceserver/api/v1/helpers.rb](/Users/kentnf/projects/omicsagent/sequenceserver/lib/sequenceserver/api/v1/helpers.rb)
+- [lib/sequenceserver/api/v1/helpers.rb](../lib/sequenceserver/api/v1/helpers.rb)
 
 导入器与白名单逻辑：
 
-- [lib/sequenceserver/database_importer.rb](/Users/kentnf/projects/omicsagent/sequenceserver/lib/sequenceserver/database_importer.rb)
-- [lib/sequenceserver/config.rb](/Users/kentnf/projects/omicsagent/sequenceserver/lib/sequenceserver/config.rb)
+- [lib/sequenceserver/database_importer.rb](../lib/sequenceserver/database_importer.rb)
+- [lib/sequenceserver/config.rb](../lib/sequenceserver/config.rb)
 
 前端启动说明：
 
-- [sequenceserver-web/README.md](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/README.md)
+- [sequenceserver-web/README.md](../sequenceserver-web/README.md)
 
 项目阶段总结：
 
-- [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
+- [docs/project-status-report.zh-CN.md](project-status-report.zh-CN.md)

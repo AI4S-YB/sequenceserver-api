@@ -2,7 +2,7 @@
 
 本文说明仓库中新增的：
 
-- [docker-compose.frontend-api.yml](/Users/kentnf/projects/omicsagent/sequenceserver/docker-compose.frontend-api.yml)
+- [docker-compose.frontend-api.yml](../docker-compose.frontend-api.yml)
 
 这个文件用于快速启动：
 
@@ -78,7 +78,7 @@ docker compose -f docker-compose.frontend-api.yml up --build
 
 使用根目录：
 
-- [Dockerfile](/Users/kentnf/projects/omicsagent/sequenceserver/Dockerfile)
+- [Dockerfile](../Dockerfile)
 
 启动 Ruby / Sinatra 后端。
 
@@ -91,7 +91,7 @@ docker compose -f docker-compose.frontend-api.yml up --build
 
 使用前端目录：
 
-- [sequenceserver-web/Dockerfile](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/Dockerfile)
+- [sequenceserver-web/Dockerfile](../sequenceserver-web/Dockerfile)
 
 把 React 前端构建成静态站点，并通过 Nginx 提供访问。
 
@@ -113,8 +113,8 @@ docker compose -f docker-compose.frontend-api.yml up --build
 
 相关文件：
 
-- [sequenceserver-web/Dockerfile](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/Dockerfile)
-- [sequenceserver-web/nginx.conf](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/nginx.conf)
+- [sequenceserver-web/Dockerfile](../sequenceserver-web/Dockerfile)
+- [sequenceserver-web/nginx.conf](../sequenceserver-web/nginx.conf)
 
 ## 6. 如果你想改成同域代理模式
 
@@ -127,7 +127,7 @@ docker compose -f docker-compose.frontend-api.yml up --build
 
 这种情况下建议参考：
 
-- [docs/frontend-nginx-example.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-nginx-example.zh-CN.md)
+- [docs/frontend-nginx-example.zh-CN.md](frontend-nginx-example.zh-CN.md)
 
 同时前端也可以把：
 
@@ -160,7 +160,7 @@ VITE_API_BASE_URL=
 
 ## 9. 相关文件
 
-- [docker-compose.frontend-api.yml](/Users/kentnf/projects/omicsagent/sequenceserver/docker-compose.frontend-api.yml)
-- [sequenceserver-web/Dockerfile](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/Dockerfile)
-- [sequenceserver-web/nginx.conf](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/nginx.conf)
-- [docs/frontend-nginx-example.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-nginx-example.zh-CN.md)
+- [docker-compose.frontend-api.yml](../docker-compose.frontend-api.yml)
+- [sequenceserver-web/Dockerfile](../sequenceserver-web/Dockerfile)
+- [sequenceserver-web/nginx.conf](../sequenceserver-web/nginx.conf)
+- [docs/frontend-nginx-example.zh-CN.md](frontend-nginx-example.zh-CN.md)

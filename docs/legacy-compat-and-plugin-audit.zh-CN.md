@@ -98,8 +98,8 @@
 
 代码位置：
 
-- [search.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/search.js)
-- [search_header_plugin.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/null_plugins/search_header_plugin.js)
+- [search.js](../public/js/search.js)
+- [search_header_plugin.js](../public/js/null_plugins/search_header_plugin.js)
 
 作用：
 
@@ -118,9 +118,9 @@
 
 代码位置：
 
-- [report.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/report.js)
-- [graphical_overview.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/report/graphical_overview.js)
-- [report_plugins.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/null_plugins/report_plugins.js)
+- [report.js](../public/js/report.js)
+- [graphical_overview.js](../public/js/report/graphical_overview.js)
+- [report_plugins.js](../public/js/null_plugins/report_plugins.js)
 
 作用：
 
@@ -145,8 +145,8 @@
 
 代码位置：
 
-- [hit.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/hit.js)
-- [hit_buttons.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/null_plugins/hit_buttons.js)
+- [hit.js](../public/js/hit.js)
+- [hit_buttons.js](../public/js/null_plugins/hit_buttons.js)
 
 作用：
 
@@ -173,8 +173,8 @@
 
 代码位置：
 
-- [sidebar.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/sidebar.js)
-- [download_links.js](/Users/kentnf/projects/omicsagent/sequenceserver/public/js/null_plugins/download_links.js)
+- [sidebar.js](../public/js/sidebar.js)
+- [download_links.js](../public/js/null_plugins/download_links.js)
 
 作用：
 

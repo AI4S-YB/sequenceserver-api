@@ -1,42 +1,40 @@
 # SequenceServer API
 
-副标题建议使用：`基于 SequenceServer 的前后端分离与开放接口版`
+副标题建议：`基于 SequenceServer 的前后端分离与开放接口版`
 
-这是一个基于上游 SequenceServer 进行二次开发的版本，目标是把原本“后端渲染页面 + 前端增强”的结构，逐步改造成更适合二次开发和开放集成的前后端分离架构。
+这是一个基于上游 SequenceServer 的二次开发版本，目标是把原本“后端渲染页面 + 前端增强”的结构，逐步改造成适合二次开发、开放集成和独立部署的前后端分离架构。
 
-项目对外名称建议使用 `SequenceServer API`。现阶段为了兼容上游和降低迁移风险，代码内部名称、Ruby gem 名称、默认命令名仍保持 `sequenceserver` 不变。
+当前对外项目名建议使用 `SequenceServer API`。为了降低兼容性风险，代码内部名称、Ruby gem 名称、默认命令名仍保持 `sequenceserver` 不变。
 
-当前改造重点包括：
+## 主入口
 
-- 新增 `/api/v1/*` REST API
-- 新增独立前端 `sequenceserver-web`
-- 支持通过 API 导入数据库、建立索引、提交 BLAST 任务、查看任务和结果
-- 支持为外部导入增加白名单和安全控制
+- 项目阶段报告: [docs/project-status-report.zh-CN.md](docs/project-status-report.zh-CN.md)
+- 前端替换清单: [docs/frontend-replacement-checklist.zh-CN.md](docs/frontend-replacement-checklist.zh-CN.md)
+- 发布命名与版权说明: [docs/release-branding.zh-CN.md](docs/release-branding.zh-CN.md)
 
-## 当前状态
+## 当前阶段
 
-截至当前版本，项目已经完成第一阶段可运行版本：
+截至当前版本，这个项目已经不是接口草图或概念验证，而是一个可以启动、联调、演示、继续迭代的第一阶段可运行版本。
 
-- 后端 API 主流程已经打通
-- 独立前端主页面已经完成
-- 数据库导入、建索引、BLAST 提交、任务查看、结果查看已经形成闭环
-- 中文开发、部署、联调文档已经补齐
-- 前端已经有最基础的自动化测试
+已经形成闭环的部分包括：
 
-更详细的阶段总结见：
+- `/api/v1/*` REST API 主流程
+- 独立前端 `sequenceserver-web`
+- 数据库导入、建索引、删除
+- BLAST 提交、任务跟踪、结果查看、结果下载
+- OpenAPI / Swagger 文档入口
+- 中文开发、部署、联调文档
 
-- [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
-- [docs/frontend-replacement-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-replacement-checklist.zh-CN.md)
+## 当前已完成能力
 
-## 当前已完成功能
+### 1. 后端 API
 
-### 后端 API
-
-已完成：
+已完成的主要接口包括：
 
 - `GET /api/v1/databases`
 - `POST /api/v1/databases`
 - `POST /api/v1/databases/:id/index`
+- `DELETE /api/v1/databases/:id`
 - `GET /api/v1/database_jobs`
 - `GET /api/v1/database_jobs/:id`
 - `POST /api/v1/database_jobs/:id/cancel`
@@ -45,13 +43,27 @@
 - `POST /api/v1/blast_jobs`
 - `GET /api/v1/blast_jobs`
 - `GET /api/v1/blast_jobs/:id`
+- `GET /api/v1/blast_jobs/:id/input`
 - `POST /api/v1/blast_jobs/:id/cancel`
 - `GET /api/v1/blast_jobs/:id/logs/:stream`
 - `GET /api/v1/blast_jobs/:id/result`
+- `GET /api/v1/blast_jobs/:id/download/:type`
+- `GET /api/v1/sequences`
+- `GET /api/v1/sequences/download`
+- `POST /api/v1/sequences/download`
+- `GET /api/v1/frontend/blast_form`
 
-### 数据库导入来源
+### 2. API 文档
 
-已支持：
+现在已经提供接口文档入口：
+
+- API 文档首页: `http://127.0.0.1:4567/api`
+- Swagger UI: `http://127.0.0.1:4567/api/docs`
+- OpenAPI JSON: `http://127.0.0.1:4567/api/openapi.json`
+
+### 3. 数据库导入来源
+
+当前已支持：
 
 - FASTA 文本
 - 浏览器文件上传
@@ -60,9 +72,18 @@
 - S3 地址
 - 数据库删除
 
-### 独立前端页面
+并支持：
 
-已完成：
+- `auto_index`
+- 白名单安全控制：
+  - `allowed_import_paths`
+  - `allowed_import_urls`
+  - `allowed_s3_buckets`
+  - `allowed_origins`
+
+### 4. 独立前端页面
+
+当前新前端已完成：
 
 - `/`
 - `/databases`
@@ -71,30 +92,41 @@
 - `/jobs/blast/:id`
 - `/jobs/database/:id`
 
+其中 BLAST 结果页已经具备：
+
+- query 级导航
+- hit table
+- alignment 浏览
+- 命中序列预览与 FASTA 下载
+- 图形概览
+- 大结果 warning
+- 结果下载
+
 ## 快速开始
 
 ### 1. 开发环境启动
 
-推荐直接使用仓库内脚本：
+推荐直接使用仓库脚本：
 
 ```bash
 bash scripts/dev-start.sh
 ```
 
-开发脚本会同时启动：
+开发脚本会启动：
 
-- 后端：`http://127.0.0.1:4567`
-- 前端：`http://127.0.0.1:5174`
-- 前端使用 Vite 开发服务器，修改前端代码后可即时热更新
-- 后端默认使用 `config/sequenceserver.local.conf`
-- 默认数据库目录使用项目内置的 `data/blast-db`
-- BLAST 搜索页默认示例序列使用项目内置的拟南芥 mRNA / 蛋白示例
+- 前端：`http://127.0.0.1:5174/`
+- 后端 API：`http://127.0.0.1:4567/`
 
-说明：
+当前本地默认开发配置启用了 `config/sequenceserver.local.conf` 中的 `api_only: true`，因此：
 
-- 前端改动可以立即看到
-- Ruby 后端代码改动仍需要重启开发脚本
-- 如需切换开发配置文件，可设置环境变量 `SEQUENCESERVER_DEV_CONFIG=/path/to/your.conf`
+- `http://127.0.0.1:4567/` 默认不再提供页面入口
+- 页面开发、联调和热更新走 `5174`
+- `4567` 主要用于 API、任务执行和 Swagger 文档
+
+开发环境的常用入口：
+
+- 前端页面：`http://127.0.0.1:5174/`
+- API 文档：`http://127.0.0.1:4567/api/docs`
 
 ### 2. 生产环境启动
 
@@ -102,25 +134,15 @@ bash scripts/dev-start.sh
 bash scripts/prod-start.sh
 ```
 
-生产脚本会：
+生产脚本会先构建 `sequenceserver-web/dist`，再启动 Ruby 后端。
 
-- 先构建 `sequenceserver-web/dist`
-- 再启动 Ruby 后端
-- 默认让前端通过同域相对路径访问 `/api/v1/*`
+默认情况下，生产环境可以继续由 Ruby 后端托管前端构建产物；如果你希望做严格前后端分离，也可以保留 `api_only` 模式，仅让后端提供 API。
 
-可选环境变量：
-
-- `SEQUENCESERVER_PROD_CONFIG=/path/to/prod.conf`
-- `PROD_VITE_API_BASE_URL=https://your-api.example.org`
-- `SKIP_FRONTEND_BUILD=1`
-
-### 3. 手动启动方式
-
-如果你希望分别手动启动，也可以：
+### 3. 手动启动
 
 ```bash
 bundle install
-bundle exec bin/sequenceserver
+bundle exec bin/sequenceserver -c config/sequenceserver.local.conf
 ```
 
 ```bash
@@ -129,67 +151,49 @@ npm install
 npm run dev
 ```
 
-当前前端默认开发地址已固定为：
+## 文档索引
 
-```bash
-http://127.0.0.1:5174
-```
+### 项目总览
 
-### 4. 配置跨域
+- [docs/project-status-report.zh-CN.md](docs/project-status-report.zh-CN.md)
+- [docs/frontend-replacement-checklist.zh-CN.md](docs/frontend-replacement-checklist.zh-CN.md)
+- [docs/release-branding.zh-CN.md](docs/release-branding.zh-CN.md)
 
-后端配置文件：
+### 前后端分离与部署
 
-```yaml
-config/sequenceserver.local.conf
-```
+- [docs/frontend-separation-plan.zh-CN.md](docs/frontend-separation-plan.zh-CN.md)
+- [docs/frontend-dev-and-deploy.zh-CN.md](docs/frontend-dev-and-deploy.zh-CN.md)
+- [docs/api-import-security.md](docs/api-import-security.md)
+- [docs/frontend-nginx-example.zh-CN.md](docs/frontend-nginx-example.zh-CN.md)
+- [docs/frontend-docker-compose.zh-CN.md](docs/frontend-docker-compose.zh-CN.md)
+- [docs/frontend-release-checklist.zh-CN.md](docs/frontend-release-checklist.zh-CN.md)
 
-建议至少加入：
+### 验证与验收
 
-```yaml
-allowed_origins:
-  - http://127.0.0.1:5174
-  - http://localhost:5174
-```
+- [docs/frontend-live-smoke-report.zh-CN.md](docs/frontend-live-smoke-report.zh-CN.md)
+- [docs/frontend-manual-acceptance-checklist.zh-CN.md](docs/frontend-manual-acceptance-checklist.zh-CN.md)
 
-## 部署与联调文档
+## 当前仍待继续完善
 
-已整理好的中文文档：
+虽然主流程已经能用，但还没有完全结束，当前仍建议继续推进：
 
-- [docs/frontend-separation-plan.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-separation-plan.zh-CN.md)
-- [docs/frontend-dev-and-deploy.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-dev-and-deploy.zh-CN.md)
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
-- [docs/frontend-nginx-example.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-nginx-example.zh-CN.md)
-- [docs/frontend-docker-compose.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-docker-compose.zh-CN.md)
-- [docs/frontend-release-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-release-checklist.zh-CN.md)
-- [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
-- [docs/frontend-replacement-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-replacement-checklist.zh-CN.md)
-- [docs/frontend-live-smoke-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-live-smoke-report.zh-CN.md)
-- [docs/frontend-manual-acceptance-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-manual-acceptance-checklist.zh-CN.md)
-
-## 当前还未完成的重点
-
-当前主流程已经能运行，但仍建议继续完善：
-
-- 更完整的 BLAST 结果可视化
-- 下载 / 导出能力
-- 数据库删除 / 更新
-- 任务重试与批量操作
-- 登录和权限体系
-- 更完整的生产化方案
+- 新前端进一步替代旧前端剩余高级交互
+- BLAST 结果页与旧版视觉细节继续对齐
+- 更完整的权限、审计和生产部署策略
+- 兼容层与旧接口的长期收口方案
 
 ## 开源说明
 
 本项目基于上游 SequenceServer 进行二次开发。
 
-如果你计划将该项目继续公开发布，请注意：
+如果你准备继续公开发布，请保持：
 
-- 保持与上游一致的 `AGPL-3.0` 协议
-- 保留 `LICENSE.txt` 与 `COPYRIGHT.txt`
-- 在 README 中明确说明与上游关系
-- 明确标注这是基于 SequenceServer 的 fork / 二次开发版本
-- 清楚区分“已完成功能”和“后续路线图”
+- 与上游一致的 `AGPL-3.0`
+- 保留 [LICENSE.txt](LICENSE.txt)
+- 保留 [COPYRIGHT.txt](COPYRIGHT.txt)
+- 在 README 中明确说明这是基于 SequenceServer 的 fork / 二次开发版本
 
-建议公开仓库时使用以下说明：
+建议在对外仓库中保留类似说明：
 
 ```text
 SequenceServer API is based on SequenceServer.
@@ -197,17 +201,10 @@ This project remains licensed under AGPL-3.0.
 See LICENSE.txt and COPYRIGHT.txt for upstream and derivative-work notices.
 ```
 
-更完整的项目命名、仓库命名、版权声明模板见：
-
-- [docs/release-branding.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/release-branding.zh-CN.md)
-
 ## 相关目录
 
-- 项目内置示例数据：
-  - [data](/Users/kentnf/projects/omicsagent/sequenceserver/data)
-- 后端 API：
-  - [lib/sequenceserver/api/v1/routes.rb](/Users/kentnf/projects/omicsagent/sequenceserver/lib/sequenceserver/api/v1/routes.rb)
-- 独立前端：
-  - [sequenceserver-web](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web)
-- 项目阶段报告：
-  - [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
+- 示例数据：[data](data)
+- 后端 API 路由：[lib/sequenceserver/api/v1/routes.rb](lib/sequenceserver/api/v1/routes.rb)
+- API 辅助序列化：[lib/sequenceserver/api/v1/helpers.rb](lib/sequenceserver/api/v1/helpers.rb)
+- 独立前端：[sequenceserver-web](sequenceserver-web)
+- OpenAPI 文档：[docs/openapi.json](docs/openapi.json)

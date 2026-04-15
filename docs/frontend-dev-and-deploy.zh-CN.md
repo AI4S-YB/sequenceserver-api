@@ -2,7 +2,7 @@
 
 本文面向当前已经改造出的独立前端：
 
-- [sequenceserver-web](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web)
+- [sequenceserver-web](../sequenceserver-web)
 
 目标是帮助你快速完成：
 
@@ -30,13 +30,13 @@
 
 前端目录：
 
-- [sequenceserver-web](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web)
+- [sequenceserver-web](../sequenceserver-web)
 
 常用文件：
 
-- [sequenceserver-web/package.json](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/package.json)
-- [sequenceserver-web/.env.example](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/.env.example)
-- [sequenceserver-web/src/lib/config.ts](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/src/lib/config.ts)
+- [sequenceserver-web/package.json](../sequenceserver-web/package.json)
+- [sequenceserver-web/.env.example](../sequenceserver-web/.env.example)
+- [sequenceserver-web/src/lib/config.ts](../sequenceserver-web/src/lib/config.ts)
 
 ## 3. 本地开发启动
 
@@ -134,7 +134,7 @@ allowed_s3_buckets:
 
 详细说明见：
 
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
+- [docs/api-import-security.md](api-import-security.md)
 
 ## 6. 常见联调检查项
 
@@ -148,7 +148,7 @@ allowed_s3_buckets:
 
 前端请求的地址来自：
 
-- [sequenceserver-web/src/lib/config.ts](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/src/lib/config.ts)
+- [sequenceserver-web/src/lib/config.ts](../sequenceserver-web/src/lib/config.ts)
 
 ### 3. `allowed_origins` 是否包含当前前端地址
 
@@ -212,17 +212,17 @@ sequenceserver-web/dist
 
 更具体的 Nginx 反向代理示例见：
 
-- [docs/frontend-nginx-example.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-nginx-example.zh-CN.md)
+- [docs/frontend-nginx-example.zh-CN.md](frontend-nginx-example.zh-CN.md)
 
 ### 方案 C：使用 Docker Compose 快速拉起前后端
 
 仓库中已经新增示例：
 
-- [docker-compose.frontend-api.yml](/Users/kentnf/projects/omicsagent/sequenceserver/docker-compose.frontend-api.yml)
+- [docker-compose.frontend-api.yml](../docker-compose.frontend-api.yml)
 
 对应说明：
 
-- [docs/frontend-docker-compose.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-docker-compose.zh-CN.md)
+- [docs/frontend-docker-compose.zh-CN.md](frontend-docker-compose.zh-CN.md)
 
 ## 8. 当前页面能力概览
 
@@ -273,9 +273,9 @@ sequenceserver-web/dist
 
 ## 10. 相关文档
 
-- [sequenceserver-web/README.md](/Users/kentnf/projects/omicsagent/sequenceserver/sequenceserver-web/README.md)
-- [docs/frontend-separation-plan.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-separation-plan.zh-CN.md)
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
-- [docs/frontend-nginx-example.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-nginx-example.zh-CN.md)
-- [docs/frontend-docker-compose.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-docker-compose.zh-CN.md)
-- [docs/frontend-release-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-release-checklist.zh-CN.md)
+- [sequenceserver-web/README.md](../sequenceserver-web/README.md)
+- [docs/frontend-separation-plan.zh-CN.md](frontend-separation-plan.zh-CN.md)
+- [docs/api-import-security.md](api-import-security.md)
+- [docs/frontend-nginx-example.zh-CN.md](frontend-nginx-example.zh-CN.md)
+- [docs/frontend-docker-compose.zh-CN.md](frontend-docker-compose.zh-CN.md)
+- [docs/frontend-release-checklist.zh-CN.md](frontend-release-checklist.zh-CN.md)

@@ -180,5 +180,5 @@ try_files $uri $uri/ /index.html;
 
 ## 10. 相关文档
 
-- [docs/frontend-dev-and-deploy.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-dev-and-deploy.zh-CN.md)
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
+- [docs/frontend-dev-and-deploy.zh-CN.md](frontend-dev-and-deploy.zh-CN.md)
+- [docs/api-import-security.md](api-import-security.md)

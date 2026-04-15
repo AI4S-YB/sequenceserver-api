@@ -163,7 +163,7 @@ allowed_s3_buckets: []
 
 详细说明见：
 
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
+- [docs/api-import-security.md](../docs/api-import-security.md)
 
 ## 当前适合的使用方式
 
@@ -186,7 +186,7 @@ allowed_s3_buckets: []
 
 ## 相关文档
 
-- [docs/frontend-separation-plan.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-separation-plan.zh-CN.md)
-- [docs/api-import-security.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/api-import-security.md)
-- [docs/project-status-report.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/project-status-report.zh-CN.md)
-- [docs/frontend-replacement-checklist.zh-CN.md](/Users/kentnf/projects/omicsagent/sequenceserver/docs/frontend-replacement-checklist.zh-CN.md)
+- [docs/frontend-separation-plan.zh-CN.md](../docs/frontend-separation-plan.zh-CN.md)
+- [docs/api-import-security.md](../docs/api-import-security.md)
+- [docs/project-status-report.zh-CN.md](../docs/project-status-report.zh-CN.md)
+- [docs/frontend-replacement-checklist.zh-CN.md](../docs/frontend-replacement-checklist.zh-CN.md)
